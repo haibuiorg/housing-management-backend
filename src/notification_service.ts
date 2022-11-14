@@ -4,6 +4,7 @@ import admin from 'firebase-admin';
 
 export const addUserNotificationToken = async (req: Request, res: Response)=> {
   try {
+    // @ts-ignore
     const userUid = req.user.uid;
     const newToken = [req.body.notification_tokens];
     await admin.firestore().collection('users').doc(userUid).
@@ -14,6 +15,7 @@ export const addUserNotificationToken = async (req: Request, res: Response)=> {
     const newUser = (
       await admin.firestore().collection('users').doc(userUid).get()
     ).data();
+    // @ts-ignore
     newUser!.email_verified = req.user.email_verified;
     res.status(200).send(newUser);
   } catch (errors) {

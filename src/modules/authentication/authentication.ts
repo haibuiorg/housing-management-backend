@@ -34,7 +34,7 @@ export const validateIdTokenAllowAnonymous =
 
       try {
         const user = await admin.auth().verifyIdToken(idToken);
-
+        // @ts-ignore
         req.user = user;
         next();
         return;
