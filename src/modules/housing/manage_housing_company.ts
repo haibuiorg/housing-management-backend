@@ -3,10 +3,12 @@ import {Request, Response} from 'express';
 import admin from 'firebase-admin';
 import {addMultipleApartmentsInBuilding}
   from './manage_apartment';
-import {APARTMENTS, HOUSING_COMPANIES, HOUSING_COMPANY_ID}
+import {APARTMENTS, HOUSING_COMPANIES, HOUSING_COMPANY_ID, USERS}
   from '../../constants';
 import {Company} from '../../dto/company';
 import {isCompanyOwner} from '../authentication/authentication';
+import {addHousingCompanyToUser} from '../user/manage_user';
+import {User} from '../../dto/user';
 
 export const createHousingCompany =
     async (request: Request, response: Response) => {
@@ -31,11 +33,12 @@ export const createHousingCompany =
         owners: [userId],
         managers: [userId],
         apartment_count: 0,
+        tenant_count: 1,
       };
       await admin.firestore().collection(HOUSING_COMPANIES)
           .doc(housingCompanyId)
           .set(housingCompany);
-
+      await addHousingCompanyToUser(housingCompanyId, userId);
       const building = request.body.building;
       if (building) {
         const houseCodes = request.body.house_codes;
@@ -54,6 +57,23 @@ export const createHousingCompany =
         }
       }
       response.status(200).send(housingCompany);
+    };
+
+export const getHousingCompanies =
+    async (request: Request, response: Response) => {
+      try {
+        // @ts-ignore
+        const userId = request.user?.uid;
+        const user = (await admin.firestore()
+            .collection(USERS).doc(userId).get()).data() as User;
+        const companyIds = user.housing_companies;
+        const companies = (await admin.firestore()
+            .collection(HOUSING_COMPANIES).where('id', 'in', companyIds).get())
+            .docs.map((doc) => doc.data());
+        response.status(200).send(companies);
+      } catch (errors) {
+        response.status(500).send({errors: errors});
+      }
     };
 
 export const updateHousingCompanyDetail =
@@ -75,7 +95,6 @@ export const updateHousingCompanyDetail =
       const lat = request.body.lat;
       const lng = request.body.lng;
       const name = request.body.name;
-      const bankAccounts = request.body.bank_accounts;
       const company: Company = {};
       if (streetAddress1) {
         company.street_address_1 = streetAddress1;
@@ -100,9 +119,6 @@ export const updateHousingCompanyDetail =
       }
       if (name) {
         company.name = name;
-      }
-      if (bankAccounts) {
-        company.bankAccounts = bankAccounts;
       }
       try {
         await admin.firestore().collection(HOUSING_COMPANIES)

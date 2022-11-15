@@ -1,4 +1,3 @@
-import {BankAccount} from './bank_account';
 import {FirebaseObject} from './firebase_object';
 
 export interface Company extends FirebaseObject {
@@ -16,5 +15,4 @@ export interface Company extends FirebaseObject {
     apartment_count?: number;
     water_bill_shared_folder_id?: string;
     water_bill_template_id?: string;
-    bankAccounts?: BankAccount[];
 }

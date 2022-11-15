@@ -58,7 +58,7 @@ export const inviteTenants = async (request: Request, response: Response) => {
   const userId = request.user?.uid;
   if (companyId && apartmentId &&
     await(isCompanyManager(userId, companyId)) &&
-     await(hasApartment(apartmentId, companyId))) {
+    await(hasApartment(apartmentId, companyId))) {
     const invitationCodeId = admin.firestore().collection(INVITATION_CODES)
         .doc().id;
     const invitationCode = _makeInvitationCode(6);

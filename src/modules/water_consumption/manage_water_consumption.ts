@@ -4,10 +4,12 @@ import {getActiveWaterPrice} from './manage_water_price';
 import admin from 'firebase-admin';
 import {CONSUMPTION_VALUE, HOUSING_COMPANIES, PERIOD, WATER_CONSUMPTION, YEAR}
   from '../../constants';
-import {isApartmentTenant} from '../housing/manage_apartment';
+import {isApartmentIdTenant, isApartmentTenant}
+  from '../housing/manage_apartment';
 import {ConsumptionValue} from '../../dto/consumption_value';
 import {generateLatestWaterBill} from './water_bill';
 import {isCompanyManager} from '../authentication/authentication';
+import {Apartment} from '../../dto/apartment';
 
 export const startNewWaterConsumptionPeriod =
     async (request:Request, response: Response) => {
@@ -53,6 +55,7 @@ export const addConsumptionValue =
     async (request:Request, response: Response) => {
       const waterConsumptionId = request.body.water_consumption_id;
       const housingCompanyId = request.body.housing_company_id;
+      const apartmentId = request.body.apartment_id;
       // @ts-ignore
       const userId = request.user?.uid;
       const consumption = request.body.consumption;
@@ -66,8 +69,14 @@ export const addConsumptionValue =
           errors: {error: 'Missing value', code: 'missing_required_post_value',
           }});
       }
-      const apartment = await isApartmentTenant(
-          userId, housingCompanyId, building, houseCode);
+      let apartment: Apartment;
+      if (apartmentId) {
+        apartment = await isApartmentIdTenant(
+            userId, housingCompanyId, apartmentId) as Apartment;
+      } else {
+        apartment = await isApartmentTenant(
+            userId, housingCompanyId, building, houseCode) as Apartment;
+      }
       if (apartment) {
         const consumptionValue: ConsumptionValue = {
           building: building,
@@ -203,6 +212,30 @@ export const getPreviousWaterConsumption = async (companyId: string) => {
   return waterConsumption;
 };
 
+export const getWaterConsumptionRequest =
+    async (request:Request, response: Response) => {
+      const companyId = request.query.housing_company_id;
+      const period = request.query.period;
+      const year = request.query.year;
+      if (!companyId || !period || !year) {
+        response.status(403).send({errors: {
+          error: 'Missing value',
+          code: 'missing_query_params',
+        }});
+        return;
+      }
+      try {
+        const waterConsumption =
+         await getWaterConsumption(
+             companyId!.toString(),
+             parseInt(period.toString()),
+             parseInt(year.toString()));
+        response.status(200).send(waterConsumption);
+      } catch (errors) {
+        console.log(errors);
+        response.status(500).send({errors: errors});
+      }
+    };
 
 export const getWaterConsumption =
     async (companyId: string, period:number, year: number) => {

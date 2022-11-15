@@ -2,6 +2,38 @@ import {Request, Response} from 'express';
 import admin, {firestore} from 'firebase-admin';
 // eslint-disable-next-line max-len
 import {APARTMENTS, BUILDING, HOUSE_CODE, HOUSING_COMPANIES, HOUSING_COMPANY_ID, TENANTS} from '../../constants';
+import {isCompanyOwner} from '../authentication/authentication';
+import {addHousingCompanyToUser} from '../user/manage_user';
+
+export const addApartmentRequest =
+  async (request: Request, response: Response) => {
+    // @ts-ignore
+    const userId = request.user?.uid;
+    const housingCompanyId = request.body.housing_company_id;
+    if (!await isCompanyOwner(userId, housingCompanyId)) {
+      response.status(403).send({
+        errors: {error: 'Not owner', code: 'not_owner'},
+      });
+      return;
+    }
+    const building = request.body.building;
+    const houseCodes = request.body.house_codes;
+    if (!building) {
+      response.status(500).send({
+        errors: {error: 'Building require', code: 'missing_buiding'},
+      });
+      return;
+    }
+    try {
+      const apartments = await addMultipleApartmentsInBuilding(
+          housingCompanyId, building, houseCodes);
+      response.status(200).send(apartments);
+    } catch (errors) {
+      response.status(500).send({
+        errors: errors,
+      });
+    }
+  };
 
 export const addTenantToApartment =
     async (userUid: string, housingCompanyId: string, apartmentId: string) => {
@@ -9,6 +41,7 @@ export const addTenantToApartment =
         await admin.firestore().collection(HOUSING_COMPANIES)
             .doc(housingCompanyId).collection(APARTMENTS).doc(apartmentId)
             .update({[TENANTS]: firestore.FieldValue.arrayUnion(userUid)});
+        await addHousingCompanyToUser(housingCompanyId, userUid);
       }
     };
 

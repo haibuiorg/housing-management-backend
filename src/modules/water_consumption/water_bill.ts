@@ -37,16 +37,62 @@ export const getWaterBillRequest =
         );
         return;
       }
-      const waterBill = (await admin.firestore().
+      const waterBills = (await admin.firestore().
           collection(HOUSING_COMPANIES).doc(companyId?.toString()).
           collection(APARTMENTS).doc(apartmentId?.toString()).
           collection(WATER_BILLS).
           where(YEAR, '==', year).
-          where(PERIOD, '==', period)
-          .orderBy(CREATED_ON, 'desc').limit(1).get()).
-          docs.map((doc) => doc.data())[0];
-      if (waterBill) {
-        response.status(200).send(waterBill);
+          where(PERIOD, '==', period).
+          orderBy(CREATED_ON, 'desc').get()).
+          docs.map((doc) => doc.data());
+      if (waterBills) {
+        response.status(200).send(waterBills);
+        return;
+      }
+      response.status(500).send(
+          {errors: {error: 'Something went wrong', code: 'unknown_error'}},
+      );
+    } catch (errors) {
+      response.status(500).send(
+          {errors: errors},
+      );
+    }
+  };
+export const getWaterBillByYearRequest =
+  async (request: Request, response: Response) => {
+    const apartmentId = request.query.apartment_id;
+    const companyId = request.query.housing_company_id;
+    const year = request.params.year;
+
+    if (!apartmentId || !year ||!companyId) {
+      response.status(500).send(
+          {errors: {error: 'Missing query value', code: 'missing_value'}},
+      );
+      return;
+    }
+    // @ts-ignore
+    const userId = request.user?.uid;
+    try {
+      const apartment = await isAuthorizedAccessToApartment(
+          userId,
+          companyId.toString() ?? '',
+          apartmentId?.toString() ??'',
+      );
+      if (!apartment) {
+        response.status(403).send(
+            {errors: {error: 'Unauthorized', code: 'not_tenant'}},
+        );
+        return;
+      }
+      const waterBills = (await admin.firestore().
+          collection(HOUSING_COMPANIES).doc(companyId?.toString()).
+          collection(APARTMENTS).doc(apartmentId?.toString()).
+          collection(WATER_BILLS).
+          where(YEAR, '==', year).
+          orderBy(CREATED_ON, 'desc').get()).
+          docs.map((doc) => doc.data());
+      if (waterBills) {
+        response.status(200).send(waterBills);
         return;
       }
       response.status(500).send(
@@ -104,8 +150,8 @@ export const generateLatestWaterBill =
       const waterBill = {
         id: waterBillId,
         url: link,
-        year: waterConsumption.year,
-        period: waterConsumption.period,
+        year: parseInt(waterConsumption.year),
+        period: parseInt(waterConsumption.period),
         created_on: new Date().getTime(),
       };
       await waterBillRef.doc(waterBillId).set(waterBill);
@@ -196,14 +242,14 @@ const updateBillTemplate =
         range: 'G38',
         values: [[waterConsumption.total_reading]],
       },
-      {
+      /* {
         range: 'C47:D47',
         values: [[company.bankAccounts?.[0].swift ?? '']],
       },
       {
         range: 'E47:H47',
         values: [[company.bankAccounts?.[0].bank_account_number ?? '']],
-      },
+      },*/
     ];
     // Additional ranges to update ...
     const resource = {
