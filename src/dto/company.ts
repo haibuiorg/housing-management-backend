@@ -1,4 +1,5 @@
 import {FirebaseObject} from './firebase_object';
+import {UI} from './ui';
 
 export interface Company extends FirebaseObject {
     id?: string,
@@ -7,6 +8,7 @@ export interface Company extends FirebaseObject {
     postal_code?: string,
     city?: string,
     country_code?: string,
+    currency_code?: string,
     lat?: number,
     lng?: number,
     name?: string;
@@ -15,4 +17,6 @@ export interface Company extends FirebaseObject {
     apartment_count?: number;
     water_bill_shared_folder_id?: string;
     water_bill_template_id?: string;
+    business_id?: string,
+    ui?: UI,
 }

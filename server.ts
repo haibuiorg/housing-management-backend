@@ -4,7 +4,8 @@ import express from 'express';
 import bodyParser from 'body-parser';
 import admin from 'firebase-admin';
 import {inviteTenants} from './src/modules/authentication/code_validation';
-import {createHousingCompany, getHousingCompanies, updateHousingCompanyDetail}
+// eslint-disable-next-line max-len
+import {createHousingCompany, getHousingCompanies, getHousingCompany, updateHousingCompanyDetail}
   from './src/modules/housing/manage_housing_company';
 import {registerWithCode, register}
   from './src/modules/authentication/register';
@@ -15,6 +16,7 @@ import {addConsumptionValue,
   getLatestWaterConsumptionRequest,
   getPreviousWaterConsumptionRequest,
   getWaterConsumptionRequest,
+  getWholeYearWaterConsumptionRequest,
   startNewWaterConsumptionPeriod}
   from './src/modules/water_consumption/manage_water_consumption';
 import {addApartmentRequest, getUserApartmentRequest}
@@ -24,6 +26,7 @@ import {getWaterBillRequest, getWaterBillByYearRequest}
 import {addNewWaterPrice, deleteWaterPrice, getActiveWaterPriceRequest}
   from './src/modules/water_consumption/manage_water_price';
 import {getUserData, updateUserData} from './src/modules/user/manage_user';
+import {getSupportedContries} from './src/modules/country/manage_country';
 
 dotenv.config();
 const path = process.env.SERVICE_ACCOUNT_PATH;
@@ -48,11 +51,17 @@ router.use(cors({
 }));
 
 router.post('/code_register', registerWithCode);
+router.get('/countries',
+    getSupportedContries);
 router.post('/register', register);
+
 router.get('/user',
     validateFirebaseIdToken, getUserData);
 router.patch('/user',
     validateFirebaseIdToken, updateUserData);
+
+router.get('/housing_company',
+    validateFirebaseIdToken, getHousingCompany);
 router.get('/housing_company/all',
     validateFirebaseIdToken, getHousingCompanies);
 router.post('/housing_company',
@@ -75,6 +84,9 @@ router.post('/water_consumption',
 router.get('/water_consumption',
     validateFirebaseIdToken,
     getWaterConsumptionRequest);
+router.get('/water_consumption/yearly',
+    validateFirebaseIdToken,
+    getWholeYearWaterConsumptionRequest);
 router.get('/water_consumption/latest',
     validateFirebaseIdToken,
     getLatestWaterConsumptionRequest);

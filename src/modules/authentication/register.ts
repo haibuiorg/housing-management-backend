@@ -35,7 +35,8 @@ export const registerWithCode =
         });
         const user = await createUserOnFirestore(
             userRecord.uid, email, [DEFAULT]);
-        addTenantToApartment(userRecord.uid, housingCompanyId, apartmentId);
+        await addTenantToApartment(
+            userRecord.uid, housingCompanyId, apartmentId);
         await removeCode(invitationCode, housingCompanyId, userRecord.uid);
         response.status(200).send(user);
         sendVerificationEmail(email);

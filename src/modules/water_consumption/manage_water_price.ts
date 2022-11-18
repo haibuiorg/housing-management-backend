@@ -72,6 +72,12 @@ export const getActiveWaterPriceRequest =
             await(isCompanyManager(userId, companyId.toString()))
         )) {
         try {
+          const isHistory = request.query.is_history;
+          if (isHistory) {
+            const waterPrice = await getWaterPriceHistory(companyId.toString());
+            response.status(200).send(waterPrice);
+            return;
+          }
           const waterPrice = await getActiveWaterPrice(companyId.toString());
           response.status(200).send(waterPrice);
         } catch (errors) {
@@ -91,4 +97,13 @@ export const getActiveWaterPrice =
           .orderBy(UPDATED_ON, 'desc').limit(1).get())
           .docs.map((doc) => doc.data());
       return waterPrices[0];
+    };
+
+export const getWaterPriceHistory =
+    async (companyId: string) => {
+      const waterPrices = (await admin.firestore()
+          .collection(HOUSING_COMPANIES).doc(companyId.toString())
+          .collection(WATER_PRICE).orderBy(UPDATED_ON, 'asc').get())
+          .docs.map((doc) => doc.data());
+      return waterPrices;
     };

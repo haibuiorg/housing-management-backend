@@ -90,7 +90,9 @@ export const isCompanyTenant =
     async (userId:string, housingCompanyId: string) => {
       try {
         const tenants = await getUserApartments(userId, housingCompanyId);
-        return tenants.length> 0 || await isAdminRole(userId);
+        return tenants.length> 0 ||
+          await isCompanyManager(userId, housingCompanyId) ||
+          await isAdminRole(userId);
       } catch (errors) {
         console.log(errors);
         return false;

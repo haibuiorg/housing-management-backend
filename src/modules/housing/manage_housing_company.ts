@@ -3,12 +3,16 @@ import {Request, Response} from 'express';
 import admin from 'firebase-admin';
 import {addMultipleApartmentsInBuilding}
   from './manage_apartment';
+// eslint-disable-next-line max-len
 import {APARTMENTS, HOUSING_COMPANIES, HOUSING_COMPANY_ID, USERS}
   from '../../constants';
 import {Company} from '../../dto/company';
-import {isCompanyOwner} from '../authentication/authentication';
+import {isCompanyOwner, isCompanyTenant}
+  from '../authentication/authentication';
 import {addHousingCompanyToUser} from '../user/manage_user';
 import {User} from '../../dto/user';
+import {isValidCountryCode} from '../country/manage_country';
+import {UI} from '../../dto/ui';
 
 export const createHousingCompany =
     async (request: Request, response: Response) => {
@@ -75,6 +79,27 @@ export const getHousingCompanies =
         response.status(500).send({errors: errors});
       }
     };
+export const getHousingCompany =
+    async (request: Request, response: Response) => {
+      try {
+        // @ts-ignore
+        const userId = request.user?.uid;
+        const companyId = request.query.housing_company_id;
+        if (!await isCompanyTenant(userId, companyId?.toString() ?? '')) {
+          response.status(403).send({
+            errors: {error: 'Not tenant', code: 'not_tenant'},
+          });
+          return;
+        }
+        const companies = (await admin.firestore()
+            .collection(HOUSING_COMPANIES).where('id', '==', companyId)
+            .limit(1).get())
+            .docs.map((doc) => doc.data());
+        response.status(200).send(companies[0]);
+      } catch (errors) {
+        response.status(500).send({errors: errors});
+      }
+    };
 
 export const updateHousingCompanyDetail =
     async (request: Request, response: Response) => {
@@ -89,12 +114,14 @@ export const updateHousingCompanyDetail =
       }
       const streetAddress1 = request.body.street_address_1;
       const streetAddress2 = request.body.street_address_2;
-      const postalCode = request.body.postalCode;
+      const postalCode = request.body.postal_code;
       const city = request.body.city;
       const countryCode = request.body.country_code;
       const lat = request.body.lat;
       const lng = request.body.lng;
       const name = request.body.name;
+      const companyBusinessId = request.body.business_id;
+      const ui = request.body.ui;
       const company: Company = {};
       if (streetAddress1) {
         company.street_address_1 = streetAddress1;
@@ -109,7 +136,9 @@ export const updateHousingCompanyDetail =
         company.city = city;
       }
       if (countryCode) {
+        const country = await isValidCountryCode(countryCode);
         company.country_code = countryCode;
+        company.currency_code = country.currency_code;
       }
       if (lat) {
         company.lat = lat;
@@ -120,14 +149,22 @@ export const updateHousingCompanyDetail =
       if (name) {
         company.name = name;
       }
+      if (companyBusinessId) {
+        company.business_id = companyBusinessId;
+      }
+      if (ui) {
+        company.ui = (ui as UI);
+      }
       try {
         await admin.firestore().collection(HOUSING_COMPANIES)
             .doc(companyId).update(company);
+        company.id = companyId;
         response.status(200).send({result: true});
       } catch (errors) {
         response.status(500).send({errors: errors});
       };
     };
+
 
 export const getCompanyData =
     async (companyId:string): Promise<Company|undefined> => {

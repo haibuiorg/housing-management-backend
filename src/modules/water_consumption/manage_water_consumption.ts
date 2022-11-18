@@ -38,6 +38,7 @@ export const startNewWaterConsumptionPeriod =
           price_id: activeWaterPrice.id,
           price_per_cube: activeWaterPrice.price_per_cube,
           total_reading: totalReading,
+          created_on: new Date().getTime(),
         };
         await admin.firestore()
             .collection(HOUSING_COMPANIES).doc(companyId)
@@ -136,8 +137,8 @@ const getWholeYearWaterConsumptions =
           .collection(HOUSING_COMPANIES).doc(companyId)
           .collection(WATER_CONSUMPTION)
           .where(YEAR, '==', year)
-          .orderBy(PERIOD, 'desc')
-          .get()).docs.map((doc) => doc.data())[0];
+          .orderBy(PERIOD, 'asc')
+          .get()).docs.map((doc) => doc.data());
       return waterConsumption;
     };
 
@@ -172,7 +173,7 @@ export const getLatestWaterConsumption = async (companyId: string) => {
       .limit(1).get()).docs.map((doc) => doc.data())[0];
   const consumptionValues =
       await getAllConsumptionValue(companyId, waterConsumption.id);
-  waterConsumption.consumption_value = consumptionValues;
+  waterConsumption.consumption_values = consumptionValues;
   return waterConsumption;
 };
 

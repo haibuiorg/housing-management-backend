@@ -2,7 +2,8 @@ import {Request, Response} from 'express';
 import admin, {firestore} from 'firebase-admin';
 // eslint-disable-next-line max-len
 import {APARTMENTS, BUILDING, HOUSE_CODE, HOUSING_COMPANIES, HOUSING_COMPANY_ID, TENANTS} from '../../constants';
-import {isCompanyOwner} from '../authentication/authentication';
+import {isCompanyManager, isCompanyOwner}
+  from '../authentication/authentication';
 import {addHousingCompanyToUser} from '../user/manage_user';
 
 export const addApartmentRequest =
@@ -162,6 +163,12 @@ export const getUserApartmentRequest =
 
 export const getUserApartments =
     async (userId : string, housingCompanyId: string) => {
+      if (await isCompanyManager(userId, housingCompanyId)) {
+        const apartments = await admin.firestore().collectionGroup(APARTMENTS)
+            .where(HOUSING_COMPANY_ID, '==', housingCompanyId)
+            .get();
+        return apartments.docs.map((doc) => doc.data());
+      }
       const apartments = await admin.firestore().collectionGroup(APARTMENTS)
           .where(HOUSING_COMPANY_ID, '==', housingCompanyId)
           .where(TENANTS, 'array-contains', userId).get();

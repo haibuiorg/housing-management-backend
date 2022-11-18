@@ -30,7 +30,7 @@ export const sendInvitationEmail = async (email: string[], code: string) => {
     },
     subject: 'Create account with Priorli App',
     html: `Hello\,
-        <br>Use this code: "${code}">
+        <br>Use this code: "${code}"
          to create user and get access to your housing company.<br>
         <br>Thank you and enjoy our app,
         <br>Your Priorli app team`,
