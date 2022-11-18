@@ -76,6 +76,7 @@ export const getHousingCompanies =
             .docs.map((doc) => doc.data());
         response.status(200).send(companies);
       } catch (errors) {
+        console.log(errors);
         response.status(500).send({errors: errors});
       }
     };
