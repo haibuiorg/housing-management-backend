@@ -2,14 +2,19 @@ import {Request, Response} from 'express';
 import {WaterConsumption} from '../../dto/water_consumption';
 import {getActiveWaterPrice} from './manage_water_price';
 import admin from 'firebase-admin';
-import {CONSUMPTION_VALUE, HOUSING_COMPANIES, PERIOD, WATER_CONSUMPTION, YEAR}
+// eslint-disable-next-line max-len
+import {CONSUMPTION_VALUE, HOUSING_COMPANIES, HOUSING_COMPANY, PERIOD, WATER_CONSUMPTION, YEAR}
   from '../../constants';
-import {isApartmentIdTenant, isApartmentTenant}
+import {getUserApartment, isApartmentTenant}
   from '../housing/manage_apartment';
 import {ConsumptionValue} from '../../dto/consumption_value';
 import {generateLatestWaterBill} from './water_bill';
 import {isCompanyManager} from '../authentication/authentication';
 import {Apartment} from '../../dto/apartment';
+import {sendNotificationToCompany}
+  from '../notification/notification_service';
+import {Company} from '../../dto/company';
+import {getUserDisplayName} from '../user/manage_user';
 
 export const startNewWaterConsumptionPeriod =
     async (request:Request, response: Response) => {
@@ -22,7 +27,8 @@ export const startNewWaterConsumptionPeriod =
             {errors: {error: 'Missing value', code: 'no_total_reading'}},
         );
       }
-      if (await isCompanyManager(userId, companyId)) {
+      const company = await isCompanyManager(userId, companyId);
+      if (company as Company) {
         const activeWaterPrice = await getActiveWaterPrice(companyId);
         const waterConsumptionId = admin.firestore()
             .collection(HOUSING_COMPANIES).doc(companyId)
@@ -44,6 +50,16 @@ export const startNewWaterConsumptionPeriod =
             .collection(HOUSING_COMPANIES).doc(companyId)
             .collection(WATER_CONSUMPTION)
             .doc(waterConsumptionId).set(waterConsumption);
+        const distplayName = await getUserDisplayName(userId, companyId);
+        await sendNotificationToCompany(companyId, {
+          created_by: userId,
+          display_name: distplayName,
+          // eslint-disable-next-line max-len
+          body: 'New water report period has started, you can now go to your apartment and report new water value',
+          app_route_location: '/' + HOUSING_COMPANY + '/' + companyId,
+          title: 'Water consumption',
+          color: company?.ui?.seed_color,
+        });
         response.status(200).send(waterConsumption);
         return;
       }
@@ -72,7 +88,7 @@ export const addConsumptionValue =
       }
       let apartment: Apartment;
       if (apartmentId) {
-        apartment = await isApartmentIdTenant(
+        apartment = await getUserApartment(
             userId, housingCompanyId, apartmentId) as Apartment;
       } else {
         apartment = await isApartmentTenant(
@@ -83,7 +99,7 @@ export const addConsumptionValue =
           building: building,
           consumption: consumption,
           updated_on: new Date().getTime(),
-          apartment_id: apartment.id,
+          apartment_id: apartment.id ?? '',
         };
         if (houseCode) {
           consumptionValue.house_code = houseCode;
@@ -92,10 +108,11 @@ export const addConsumptionValue =
           await admin.firestore()
               .collection(HOUSING_COMPANIES).doc(housingCompanyId)
               .collection(WATER_CONSUMPTION).doc(waterConsumptionId)
-              .collection(CONSUMPTION_VALUE).doc(apartment.id)
+              .collection(CONSUMPTION_VALUE).doc(apartment.id ?? '')
               .set(consumptionValue);
-          await generateLatestWaterBill(userId, apartment.id, housingCompanyId);
-          response.status(200).send(consumptionValue);
+          const waterBill = await generateLatestWaterBill(userId,
+              apartment.id ?? '', housingCompanyId, consumption);
+          response.status(200).send(waterBill);
         } catch (errors) {
           console.log(errors);
           response.status(500).send({errors: errors});

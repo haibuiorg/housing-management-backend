@@ -13,6 +13,7 @@ import {addHousingCompanyToUser} from '../user/manage_user';
 import {User} from '../../dto/user';
 import {isValidCountryCode} from '../country/manage_country';
 import {UI} from '../../dto/ui';
+import {getPublicLinkForFile} from '../storage/manage_storage';
 
 export const createHousingCompany =
     async (request: Request, response: Response) => {
@@ -38,6 +39,7 @@ export const createHousingCompany =
         managers: [userId],
         apartment_count: 0,
         tenant_count: 1,
+        is_deleted: false,
       };
       await admin.firestore().collection(HOUSING_COMPANIES)
           .doc(housingCompanyId)
@@ -71,10 +73,32 @@ export const getHousingCompanies =
         const user = (await admin.firestore()
             .collection(USERS).doc(userId).get()).data() as User;
         const companyIds = user.housing_companies;
-        const companies = (await admin.firestore()
-            .collection(HOUSING_COMPANIES).where('id', 'in', companyIds).get())
-            .docs.map((doc) => doc.data());
-        response.status(200).send(companies);
+        const result: (admin.firestore.DocumentData | undefined)[] = [];
+        await Promise.all(companyIds.map(async (id) => {
+          try {
+            const data = ((await admin.firestore()
+                .collection(HOUSING_COMPANIES).doc(id).get())
+                .data() as Company);
+            if (data && !data.is_deleted) {
+              if (data.cover_image_storage_link &&
+                  data.cover_image_storage_link.toString().length> 0) {
+                const coverImageUrl =
+                      await getPublicLinkForFile(data.cover_image_storage_link);
+                data.cover_image_url = coverImageUrl;
+              }
+              if (data.logo_storage_link &&
+                data.logo_storage_link.toString().length> 0) {
+                const logoUrl =
+                    await getPublicLinkForFile(data.logo_storage_link);
+                data.logo_url = logoUrl;
+              }
+              result.push(data);
+            }
+          } catch (error) {
+            console.log(error);
+          }
+        }));
+        response.status(200).send(result);
       } catch (errors) {
         console.log(errors);
         response.status(500).send({errors: errors});
@@ -96,12 +120,24 @@ export const getHousingCompany =
             .collection(HOUSING_COMPANIES).where('id', '==', companyId)
             .limit(1).get())
             .docs.map((doc) => doc.data());
-        response.status(200).send(companies[0]);
+        const data = companies[0] as Company;
+        if (data.cover_image_storage_link &&
+              data.cover_image_storage_link.toString().length> 0) {
+          const coverImageUrl =
+                  await getPublicLinkForFile(data.cover_image_storage_link);
+          data.cover_image_url = coverImageUrl;
+        }
+        if (data.logo_storage_link &&
+            data.logo_storage_link.toString().length> 0) {
+          const logoUrl =
+                await getPublicLinkForFile(data.logo_storage_link);
+          data.logo_url = logoUrl;
+        }
+        response.status(200).send(data);
       } catch (errors) {
         response.status(500).send({errors: errors});
       }
     };
-
 export const updateHousingCompanyDetail =
     async (request: Request, response: Response) => {
       const companyId = request.body.housing_company_id;
@@ -123,7 +159,10 @@ export const updateHousingCompanyDetail =
       const name = request.body.name;
       const companyBusinessId = request.body.business_id;
       const ui = request.body.ui;
-      const company: Company = {};
+      const isDeleted = request.body.is_deleted;
+      const company: Company = {
+        is_deleted: false,
+      };
       if (streetAddress1) {
         company.street_address_1 = streetAddress1;
       }
@@ -140,6 +179,7 @@ export const updateHousingCompanyDetail =
         const country = await isValidCountryCode(countryCode);
         company.country_code = countryCode;
         company.currency_code = country.currency_code;
+        company.vat = country.vat;
       }
       if (lat) {
         company.lat = lat;
@@ -155,6 +195,11 @@ export const updateHousingCompanyDetail =
       }
       if (ui) {
         company.ui = (ui as UI);
+      }
+      if (isDeleted) {
+        if (await isCompanyOwner(userId, companyId)) {
+          company.is_deleted = isDeleted;
+        }
       }
       try {
         await admin.firestore().collection(HOUSING_COMPANIES)
@@ -183,14 +228,28 @@ export const hasApartment =
     };
 
 export const getCompanyTenantIds =
-  async (housingCompanyId:string) => {
+  async (housingCompanyId:string,
+      includeOwner: boolean = false,
+      includeManager: boolean = false) : Promise<string[]> => {
     const apartments = await admin.firestore().
         collectionGroup(APARTMENTS).
         where(HOUSING_COMPANY_ID, '==', housingCompanyId).get();
     const tenants: string[] = [];
+    if (includeManager || includeOwner) {
+      const housingCompany = ((await
+      admin.firestore().collection(HOUSING_COMPANIES)
+          .doc(housingCompanyId).get())
+          .data() as Company);
+      if (includeManager) {
+        tenants.push(...housingCompany.managers ?? []);
+      }
+      if (includeOwner) {
+        tenants.push(...housingCompany.owners ?? []);
+      }
+    }
     apartments.docs.map((doc) => {
-      tenants.push(doc.data().tenants);
+      tenants.push(...doc.data().tenants as string[]);
     });
-    return tenants;
+    return [...new Set(tenants)];
   };
 

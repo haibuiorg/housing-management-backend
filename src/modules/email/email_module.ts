@@ -1,4 +1,5 @@
 'use strict';
+import {Request, Response} from 'express';
 import admin from 'firebase-admin';
 const sgMail = require('@sendgrid/mail');
 
@@ -39,3 +40,30 @@ export const sendInvitationEmail = async (email: string[], code: string) => {
   await sgMail.send(msg, true);
 };
 
+export const sendPasswordResetEmail =
+  async (request: Request, response: Response) => {
+    try {
+      const email = request.body.email;
+      const resetPasswordLink =
+      await admin.auth().generatePasswordResetLink(email);
+      const msg = {
+        to: email, // Change to your recipient
+        from: {
+          email: 'contact@kierr.co',
+          name: 'Priorli App',
+        },
+        subject: 'Resetting your Priorli password',
+        html: `Hello\,
+          <br>You have requested to reset your password follow this
+          <a href="${resetPasswordLink}">Reset password link</a> to continue
+          .<br>If you didn\'t ask to reset your password,
+           you can ignore this email.<br><br>
+           Thank you and happy recycling!,<br>Your Priorli app team`,
+      };
+      sgMail.setApiKey(process.env.SENDGRID);
+      await sgMail.send(msg);
+      response.status(200).send({result: 'success'});
+    } catch (error) {
+      response.status(500).send({result: 'failed'});
+    }
+  };

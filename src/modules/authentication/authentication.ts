@@ -2,7 +2,7 @@ import {Request, Response} from 'express';
 import admin from 'firebase-admin';
 import {getUserApartments, isApartmentIdTenant}
   from '../housing/manage_apartment';
-import {ADMIN} from '../../constants';
+import {ADMIN, APARTMENTS, HOUSING_COMPANIES} from '../../constants';
 import {getCompanyData}
   from '../housing/manage_housing_company';
 import {retrieveUser} from '../user/manage_user';
@@ -20,7 +20,7 @@ export const validateIdTokenAllowAnonymous =
 
       let idToken;
       if (req.headers.authorization &&
-    req.headers.authorization.startsWith('Bearer ')) {
+          req.headers.authorization.startsWith('Bearer ')) {
         // Read the ID Token from the Authorization header.
         idToken = req.headers.authorization.split('Bearer ')[1];
       } else if (req.cookies) {
@@ -65,9 +65,17 @@ export const isAuthorizedAccessToApartment =
           userId,
           companyId,
           apartmentId);
-      if (!apartment &&
-        !(await isCompanyManager(userId, companyId.toString())) &&
-        !(await isAdminRole(userId))) {
+      if (!apartment) {
+        if (await isCompanyManager(userId, companyId) ||
+       await isAdminRole(userId)) {
+          const adminApartment = await admin.firestore()
+              .collection(HOUSING_COMPANIES)
+              .doc(companyId).collection(APARTMENTS).doc(apartmentId)
+              .get();
+
+          console.log(adminApartment.data());
+          return adminApartment.data();
+        }
         return undefined;
       }
       return apartment;
@@ -82,8 +90,11 @@ export const isCompanyOwner =
 export const isCompanyManager =
     async (userId:string, housingCompanyId: string) => {
       const company = await getCompanyData(housingCompanyId);
-      return company?.managers?.includes(userId) ||
-       company?.owners?.includes(userId) || await isAdminRole(userId);
+      if (company?.managers?.includes(userId) ||
+       company?.owners?.includes(userId) || await isAdminRole(userId)) {
+        return company;
+      }
+      return undefined;
     };
 
 export const isCompanyTenant =

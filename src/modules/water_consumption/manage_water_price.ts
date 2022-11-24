@@ -1,30 +1,47 @@
 import {Request, Response} from 'express';
 import {WaterPrice} from '../../dto/water_price';
 import admin from 'firebase-admin';
-import {HOUSING_COMPANIES, WATER_PRICE, IS_ACTIVE, UPDATED_ON}
+// eslint-disable-next-line max-len
+import {HOUSING_COMPANIES, WATER_PRICE, IS_ACTIVE, UPDATED_ON, HOUSING_COMPANY, WATER_CONSUMPTION_MANAGEMENT}
   from '../../constants';
 import {isCompanyManager, isCompanyTenant}
   from '../authentication/authentication';
+import {sendNotificationToCompany} from '../notification/notification_service';
+import {getUserDisplayName} from '../user/manage_user';
 
 export const addNewWaterPrice = async (request:Request, response: Response) => {
   const companyId = request.body.housing_company_id;
   // @ts-ignore
   const userId = request.user?.uid;
-  if (await(isCompanyManager(userId, companyId))) {
+  const company = await(isCompanyManager(userId, companyId));
+  if (company) {
     const waterPriceId = admin.firestore()
         .collection(HOUSING_COMPANIES).doc(companyId)
         .collection(WATER_PRICE).doc().id;
+    const basicFee = request.body.basic_fee ?? 0;
+    const pricePerCube = request.body.price_per_cube ?? 0;
     const waterPrice : WaterPrice = {
-      basic_fee: request.body.basic_fee ?? 0,
-      price_per_cube: request.body.price_per_cube ?? 0,
+      basic_fee: basicFee,
+      price_per_cube: pricePerCube,
       is_active: true,
       id: waterPriceId,
       updated_on: new Date().getTime(),
     };
     try {
+      const distplayName = await getUserDisplayName(userId, companyId);
       await admin.firestore()
           .collection(HOUSING_COMPANIES).doc(companyId)
           .collection(WATER_PRICE).doc(waterPriceId).set(waterPrice);
+      await sendNotificationToCompany(companyId, {
+        created_by: userId,
+        display_name: distplayName,
+        // eslint-disable-next-line max-len
+        body: 'New water price updated, now total basic fee is: ' + basicFee + company.currency_code + ' and price per cube is: ' + pricePerCube + company.country_code,
+        app_route_location: '/' + HOUSING_COMPANY + '/' + companyId +
+         '/' + WATER_CONSUMPTION_MANAGEMENT,
+        title: 'New water price',
+        color: company?.ui?.seed_color,
+      });
       response.status(200).send(waterPrice);
     } catch (errors) {
       response.status(500).send({errors: errors});

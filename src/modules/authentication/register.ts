@@ -1,6 +1,6 @@
 import admin from 'firebase-admin';
 import {isValidEmail} from '../../strings_utils';
-import {sendVerificationEmail} from '../../email_module';
+import {sendVerificationEmail} from '../email/email_module';
 import {Request, Response} from 'express';
 import {codeValidation, removeCode} from './code_validation';
 import {DEFAULT, USERS}

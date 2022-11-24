@@ -1,12 +1,19 @@
 export const INVITATION_CODES = 'invitation_codes';
 export const USERS = 'users';
 export const APP_NAME = 'Priorli App';
+export const APP_COLOR = '#FFCB73';
 export const HOUSING_COMPANIES = 'housing_companies';
+export const HOUSING_COMPANY = 'housing_company';
+export const NOTIFICATION_MESSAGES = 'notification_messages';
+export const APARTMENT = 'apartment';
+export const BANK_ACCOUNTS = 'bank_accounts';
+export const ANNOUNCEMENTS = 'announcements';
 export const COUNTRIES = 'countries';
 export const COUNTRY_CODE = 'country_code';
 export const TENANTS = 'tenants';
 export const APARTMENTS = 'apartments';
 export const WATER_BILLS = 'water_bills';
+export const WATER_CONSUMPTION_MANAGEMENT = 'water_consumption_management';
 export const HOUSING_COMPANY_ID = 'housing_company_id';
 export const CODE = 'code';
 export const BUILDING = 'building';
@@ -26,3 +33,6 @@ export const CODE_CHARACTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuv
 export const ADMIN = 'admin';
 export const DEFAULT = 'default';
 export const ROLES = 'roles';
+export const IS_DELETED = 'is_deleted';
+export const COMPANY_MANAGER = 'Company manager';
+

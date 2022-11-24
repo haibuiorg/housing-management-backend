@@ -2,7 +2,7 @@ import {Request, Response} from 'express';
 import admin, {firestore} from 'firebase-admin';
 import {CODE, CODE_CHARACTERS, HOUSING_COMPANY_ID, INVITATION_CODES, IS_VALID}
   from '../../constants';
-import {sendInvitationEmail} from '../../email_module';
+import {sendInvitationEmail} from '../email/email_module';
 import {hasApartment}
   from '../housing/manage_housing_company';
 import {isCompanyManager} from './authentication';

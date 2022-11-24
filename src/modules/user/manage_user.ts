@@ -1,6 +1,8 @@
 import {Request, Response} from 'express';
 import admin, {firestore} from 'firebase-admin';
-import {HOUSING_COMPANIES, USERS} from '../../constants';
+import {COMPANY_MANAGER, HOUSING_COMPANIES, USERS} from '../../constants';
+import {User} from '../../dto/user';
+import {isCompanyManager} from '../authentication/authentication';
 
 export const getUserData = async (request: Request, response: Response) => {
   // @ts-ignore
@@ -65,6 +67,36 @@ export const addHousingCompanyToUser =
         );
   };
 
+export const getUserDisplayName =async (userId: string, companyId: string) => {
+  const user = (await retrieveUser(userId) as User);
+  if (user.first_name.length === 0 && user.last_name.length === 0) {
+    if (await isCompanyManager(userId, companyId)) {
+      return COMPANY_MANAGER;
+    }
+    return '';
+  }
+  const displayName = user.first_name + ' ' + user.last_name;
+  return displayName;
+};
+
 export const retrieveUser = async (userId: string) => {
   return (await admin.firestore().collection(USERS).doc(userId).get()).data();
 };
+
+export const changeUserPassword = async (req: Request, res: Response)=> {
+  try {
+    // @ts-ignore
+    const userUid = req.user.uid;
+    req.body.updated_on = new Date().getTime();
+    const newPassword = req.body.new_password;
+    // const oldPassword = req.body.old_password;
+    // @ts-ignore
+    // TODO find a way to verify old password
+    await admin.auth().updateUser(userUid, {password: newPassword});
+    res.status(200).send({result: 'success'});
+  } catch (errors) {
+    res.status(500).send({
+      errors: {message: 'Invalid password', code: 'wrong_password'}});
+  }
+};
+

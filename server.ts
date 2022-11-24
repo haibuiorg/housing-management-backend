@@ -19,20 +19,33 @@ import {addConsumptionValue,
   getWholeYearWaterConsumptionRequest,
   startNewWaterConsumptionPeriod}
   from './src/modules/water_consumption/manage_water_consumption';
-import {addApartmentRequest, getUserApartmentRequest}
+// eslint-disable-next-line max-len
+import {addApartmentRequest, editApartmentRequest, getSingleApartmentRequest, getUserApartmentRequest}
   from './src/modules/housing/manage_apartment';
-import {getWaterBillRequest, getWaterBillByYearRequest}
+import {getWaterBillRequest, getWaterBillByYearRequest, getWaterBillLinkRequest}
   from './src/modules/water_consumption/water_bill';
 import {addNewWaterPrice, deleteWaterPrice, getActiveWaterPriceRequest}
   from './src/modules/water_consumption/manage_water_price';
-import {getUserData, updateUserData} from './src/modules/user/manage_user';
+import {changeUserPassword, getUserData, updateUserData}
+  from './src/modules/user/manage_user';
 import {getSupportedContries} from './src/modules/country/manage_country';
+// eslint-disable-next-line max-len
+import {addCompanyBankAccountRequest, deleteCompanyBankAccountRequest, getCompanyBankAccountRequest}
+  from './src/modules/payment/manage_payment';
+// eslint-disable-next-line max-len
+import {addUserNotificationToken, createNotificationChannels, deleteNotificationChannels, deleteNotificationToken, getNotificationChannels, getNotificationMessages, sendNotificationTest, setNotificationMessageSeen}
+  from './src/modules/notification/notification_service';
+import {sendPasswordResetEmail} from './src/modules/email/email_module';
+import {editAnnouncement, getAnnouncements, makeAnnouncement}
+  from './src/modules/announcement/manage_announcement';
+
 
 dotenv.config();
-const path = process.env.SERVICE_ACCOUNT_PATH;
-export const serviceAccount = require(path!);
+const serviceAccountPath = process.env.SERVICE_ACCOUNT_PATH;
+const serviceAccount = require(serviceAccountPath!);
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount),
+  storageBucket: 'priorli.appspot.com',
 });
 
 
@@ -54,11 +67,17 @@ router.post('/code_register', registerWithCode);
 router.get('/countries',
     getSupportedContries);
 router.post('/register', register);
+router.post('/reset_password', sendPasswordResetEmail);
 
 router.get('/user',
     validateFirebaseIdToken, getUserData);
 router.patch('/user',
     validateFirebaseIdToken, updateUserData);
+router.patch('/user/notification_token',
+    validateFirebaseIdToken, addUserNotificationToken);
+router.delete('/user/notification_token',
+    validateFirebaseIdToken, deleteNotificationToken);
+router.patch('/change_password', validateFirebaseIdToken, changeUserPassword);
 
 router.get('/housing_company',
     validateFirebaseIdToken, getHousingCompany);
@@ -71,6 +90,8 @@ router.put('/housing_company',
     validateFirebaseIdToken,
     updateHousingCompanyDetail);
 router.get('/apartments', validateFirebaseIdToken, getUserApartmentRequest);
+router.get('/apartment', validateFirebaseIdToken, getSingleApartmentRequest);
+router.put('/apartment', validateFirebaseIdToken, editApartmentRequest);
 router.post('/apartments', validateFirebaseIdToken, addApartmentRequest);
 router.post('/apartments/invite', validateFirebaseIdToken, inviteTenants);
 
@@ -102,6 +123,39 @@ router.get('/water_bill/:year',
     validateFirebaseIdToken,
     getWaterBillByYearRequest);
 router.get('/water_bill', validateFirebaseIdToken, getWaterBillRequest);
+router.get('/water_bill_link',
+    validateFirebaseIdToken, getWaterBillLinkRequest);
+
+router.get('/bank_accounts',
+    validateFirebaseIdToken, getCompanyBankAccountRequest);
+router.post('/bank_accounts',
+    validateFirebaseIdToken, addCompanyBankAccountRequest);
+router.delete('/bank_accounts',
+    validateFirebaseIdToken, deleteCompanyBankAccountRequest);
+
+router.get('/announcement',
+    validateFirebaseIdToken, getAnnouncements);
+router.get('/announcement/:announcementId',
+    validateFirebaseIdToken, getAnnouncements);
+router.post('/announcement',
+    validateFirebaseIdToken, makeAnnouncement);
+router.patch('/announcement',
+    validateFirebaseIdToken, editAnnouncement);
+
+
+router.get('/notification_channels',
+    validateFirebaseIdToken, getNotificationChannels);
+router.post('/notification_channels',
+    validateFirebaseIdToken, createNotificationChannels);
+router.delete('/notification_channels',
+    validateFirebaseIdToken, deleteNotificationChannels);
+
+router.get('/notification_messsage',
+    validateFirebaseIdToken, getNotificationMessages);
+router.patch('/notification_messsage/seen',
+    validateFirebaseIdToken, setNotificationMessageSeen);
+
+router.post('/test_notification', sendNotificationTest);
 
 app.get('/', (req, res) => {
   res.status(404).send('Hello priorli!');

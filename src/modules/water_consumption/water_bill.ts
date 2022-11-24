@@ -10,6 +10,9 @@ import {APARTMENTS, CREATED_ON, HOUSING_COMPANIES, PERIOD, WATER_BILLS, YEAR}
   from '../../constants';
 import {isAuthorizedAccessToApartment}
   from '../authentication/authentication';
+import {getPublicLinkForFile} from '../storage/manage_storage';
+import {BankAccount} from '../../dto/bank_account';
+import {getBankAccounts} from '../payment/manage_payment';
 
 export const getWaterBillRequest =
   async (request: Request, response: Response) => {
@@ -88,7 +91,7 @@ export const getWaterBillByYearRequest =
           collection(HOUSING_COMPANIES).doc(companyId?.toString()).
           collection(APARTMENTS).doc(apartmentId?.toString()).
           collection(WATER_BILLS).
-          where(YEAR, '==', year).
+          where(YEAR, '==', parseInt(year)).
           orderBy(CREATED_ON, 'desc').get()).
           docs.map((doc) => doc.data());
       if (waterBills) {
@@ -99,6 +102,7 @@ export const getWaterBillByYearRequest =
           {errors: {error: 'Something went wrong', code: 'unknown_error'}},
       );
     } catch (errors) {
+      console.log(errors);
       response.status(500).send(
           {errors: errors},
       );
@@ -109,8 +113,8 @@ export const generateLatestWaterBill =
   async (
       userId: string,
       apartmentId:string,
-      companyId: string) => {
-    const currentTime = new Date().getTime();
+      companyId: string,
+      consumption: number) => {
     const waterConsumption =
       await getLatestWaterConsumption(companyId.toString());
     const previousPeriodConsumption =
@@ -126,30 +130,39 @@ export const generateLatestWaterBill =
       }
       const company = await getCompanyData(companyId.toString() ?? '');
       const id = company?.water_bill_template_id;
-      const folderId = company?.water_bill_shared_folder_id;
+      const bankAccounts = await getBankAccounts(companyId.toString() ?? '');
       await updateBillTemplate(
           company!,
           apartment as Apartment,
           waterConsumption as WaterConsumption,
           previousPeriodConsumption as WaterConsumption,
-          id?.toString() ??'');
-      const stream = await exportPdfStream(id?.toString() ??'');
+          id?.toString() ??'', bankAccounts);
       const link =
         await generatePdf(
-            stream,
-            apartment!.building.toString() +
-             '_' + waterConsumption.year +
-             '_' + waterConsumption.period +
-             '_' + currentTime,
-            folderId?.toString() ??'');
+            id?.toString() ??'',
+            'housing_companies/' + companyId + '/' +
+            apartmentId + '/water_bills' +
+             '/' + waterConsumption.year +
+             '/' + waterConsumption.period +
+            '.pdf',
+        );
       const waterBillRef = admin.firestore().
           collection(HOUSING_COMPANIES).doc(companyId?.toString()).
           collection(APARTMENTS).doc(apartmentId?.toString()).
           collection(WATER_BILLS);
       const waterBillId = waterBillRef.doc().id;
+      const invoiceValue =
+          ((waterConsumption.basic_fee / (company?.apartment_count ?? 1)) +
+          (waterConsumption.price_per_cube* consumption)) *
+          (1 +(company?.vat ?? 0));
       const waterBill = {
         id: waterBillId,
         url: link,
+        consumption: consumption,
+        housing_company_id: companyId,
+        apartment_id: apartmentId,
+        invoice_value: parseFloat(invoiceValue.toFixed(2)),
+        currency_code: company?.currency_code ?? '',
         year: parseInt(waterConsumption.year),
         period: parseInt(waterConsumption.period),
         created_on: new Date().getTime(),
@@ -157,6 +170,7 @@ export const generateLatestWaterBill =
       await waterBillRef.doc(waterBillId).set(waterBill);
       return waterBill;
     } catch (errors) {
+      console.log(errors);
       return undefined;
     }
   };
@@ -168,13 +182,14 @@ const updateBillTemplate =
       apartment: Apartment,
       waterConsumption: WaterConsumption,
       previousPeriodConsumption: WaterConsumption,
-      templateId: string) => {
+      templateId: string,
+      bankAccounts?: BankAccount[]) => {
     const {google} = require('googleapis');
     const SCOPES = ['https://www.googleapis.com/auth/spreadsheets'];
-    const path = process.env.SERVICE_ACCOUNT_PATH;
+
     const auth = new google.auth.GoogleAuth({
       scopes: SCOPES,
-      keyFile: path,
+      keyFile: './service-account-key.json',
     });
     const client = await auth.getClient();
     const googleSheetInstance = google.sheets({version: 'v4', auth: client});
@@ -242,14 +257,14 @@ const updateBillTemplate =
         range: 'G38',
         values: [[waterConsumption.total_reading]],
       },
-      /* {
+      {
         range: 'C47:D47',
-        values: [[company.bankAccounts?.[0].swift ?? '']],
+        values: [[bankAccounts?.[0]?.swift ?? '']],
       },
       {
         range: 'E47:H47',
-        values: [[company.bankAccounts?.[0].bank_account_number ?? '']],
-      },*/
+        values: [[bankAccounts?.[0]?.bank_account_number ?? '']],
+      },
     ];
     // Additional ranges to update ...
     const resource = {
@@ -263,54 +278,62 @@ const updateBillTemplate =
       });
       return result;
     } catch (err) {
-      // TODO (Developer) - Handle exception
-      throw err;
+      console.log(err);
     }
   };
 
-const exportPdfStream = async (templateId: string) => {
-  const {google} = require('googleapis');
-  const SCOPES = ['https://www.googleapis.com/auth/drive'];
-  const path = process.env.SERVICE_ACCOUNT_PATH;
-  const auth = new google.auth.GoogleAuth({
-    scopes: SCOPES,
-    keyFile: path,
-  });
-  const client = await auth.getClient();
-  const googleDriveInstance = google.drive({version: 'v3', auth: client});
-  const res = await googleDriveInstance.files.export(
-      {fileId: templateId, mimeType: 'application/pdf', size: 'A4'},
-      {responseType: 'stream'},
-  );
-  return res;
-};
+const generatePdf =
+    async (templateId: string, fileName: string) => {
+      try {
+        const {google} = require('googleapis');
+        const SCOPES = ['https://www.googleapis.com/auth/drive'];
+        const auth = new google.auth.GoogleAuth({
+          scopes: SCOPES,
+          keyFile: './service-account-key.json',
+        });
+        const client = await auth.getClient();
+        const googleDriveInstance = google.drive({version: 'v3', auth: client});
+        const res = await googleDriveInstance.files.export(
+            {fileId: templateId, mimeType: 'application/pdf', size: 'A4'},
+            {responseType: 'stream'},
+        );
+        const gs = admin.storage().bucket().file(fileName).createWriteStream({
+          resumable: false,
+          validation: false,
+          contentType: 'auto',
+          metadata: {
+            'Cache-Control': 'public, max-age=31536000'},
+        });
+        await res.data.pipe(gs);
+        return fileName;
+      } catch (errors) {
+        console.log(errors);
+      }
+    };
 
-const generatePdf =async (stream:any, fileName: string, folderId: string) => {
-  const {google} = require('googleapis');
-  const SCOPES = ['https://www.googleapis.com/auth/drive'];
-  const path = process.env.SERVICE_ACCOUNT_PATH;
-  const auth = new google.auth.GoogleAuth({
-    scopes: SCOPES,
-    keyFile: path,
-  });
-  const client = await auth.getClient();
-  const googleDriveInstance = google.drive({version: 'v3', auth: client});
+export const getWaterBillLinkRequest =
+    async (request: Request, response: Response) => {
+      // @ts-ignore
+      const userId = request.user?.uid;
+      const waterBillId = request.query.water_bill_id;
+      try {
+        const waterBill = (await admin.firestore().collectionGroup(WATER_BILLS)
+            .where('id', '==', waterBillId).limit(1).get())
+            .docs.map((doc)=> doc.data())[0];
+        const apartment = await isAuthorizedAccessToApartment(
+            userId, waterBill.housing_company_id, waterBill.apartment_id);
+        if (!apartment) {
+          response.status(403).send(
+              {errors: {message: 'Not tenant', code: 'not_tenant'}});
+          return;
+        }
+        const link = await getPublicLinkForFile(waterBill.url);
+        response.status(200).send({link: link});
+      } catch (errors) {
+        console.log(errors);
+        response.status(500).send(
+            {errors: errors});
+      }
+    };
 
-  const media = {
-    mimeType: 'application/pdf',
-    body: stream.data,
-  };
-  const resCreate = await googleDriveInstance.files.create({
-    uploadType: 'media',
-    media: media,
-    supportsAllDrives: true,
-    resource: {
-      'name': fileName + '.pdf',
-      'parents': [folderId],
-      'kind': 'drive#file',
-      'mimeType': 'application/pdf'},
-    fields: 'id,name',
-  });
-  return 'https://drive.google.com/file/d/' + resCreate.data.id + '/view';
-};
 

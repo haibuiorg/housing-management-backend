@@ -1,4 +1,5 @@
 import {FirebaseObject} from './firebase_object';
+import {NotificationChannel} from './notification_channel';
 import {UI} from './ui';
 
 export interface Company extends FirebaseObject {
@@ -19,4 +20,9 @@ export interface Company extends FirebaseObject {
     water_bill_template_id?: string;
     business_id?: string,
     ui?: UI,
+    is_deleted: boolean;
+    vat?: number;
+    cover_image_url?: string;
+    logo_url?: string;
+    notification_channels?: NotificationChannel[]
 }
