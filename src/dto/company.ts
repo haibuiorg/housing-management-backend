@@ -16,7 +16,6 @@ export interface Company extends FirebaseObject {
     owners?: string[];
     managers?: string[];
     apartment_count?: number;
-    water_bill_shared_folder_id?: string;
     water_bill_template_id?: string;
     business_id?: string,
     ui?: UI,

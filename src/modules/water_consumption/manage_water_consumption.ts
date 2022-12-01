@@ -3,7 +3,7 @@ import {WaterConsumption} from '../../dto/water_consumption';
 import {getActiveWaterPrice} from './manage_water_price';
 import admin from 'firebase-admin';
 // eslint-disable-next-line max-len
-import {CONSUMPTION_VALUE, HOUSING_COMPANIES, HOUSING_COMPANY, PERIOD, WATER_CONSUMPTION, YEAR}
+import {CONSUMPTION_VALUE, DEFAULT, HOUSING_COMPANIES, HOUSING_COMPANY, PERIOD, WATER_CONSUMPTION, YEAR}
   from '../../constants';
 import {getUserApartment, isApartmentTenant}
   from '../housing/manage_apartment';
@@ -11,7 +11,7 @@ import {ConsumptionValue} from '../../dto/consumption_value';
 import {generateLatestWaterBill} from './water_bill';
 import {isCompanyManager} from '../authentication/authentication';
 import {Apartment} from '../../dto/apartment';
-import {sendNotificationToCompany}
+import {sendTopicNotification}
   from '../notification/notification_service';
 import {Company} from '../../dto/company';
 import {getUserDisplayName} from '../user/manage_user';
@@ -51,7 +51,8 @@ export const startNewWaterConsumptionPeriod =
             .collection(WATER_CONSUMPTION)
             .doc(waterConsumptionId).set(waterConsumption);
         const distplayName = await getUserDisplayName(userId, companyId);
-        await sendNotificationToCompany(companyId, {
+        // TODO: create notification channels/topics
+        await sendTopicNotification(DEFAULT, {
           created_by: userId,
           display_name: distplayName,
           // eslint-disable-next-line max-len

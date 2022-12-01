@@ -1,6 +1,7 @@
 import {Request, Response} from 'express';
-import admin, {firestore} from 'firebase-admin';
+import admin from 'firebase-admin';
 import {COMPANY_MANAGER, HOUSING_COMPANIES, USERS} from '../../constants';
+import {Company} from '../../dto/company';
 import {User} from '../../dto/user';
 import {isCompanyManager} from '../authentication/authentication';
 
@@ -51,7 +52,7 @@ export const updateUserData = async (request: Request, response: Response) => {
 const checkUserEmailVerificationStatus = async (request: Request) :
   Promise<boolean> => {
   // @ts-ignore
-  const emailVerified = request.user?.emailVerified;
+  const emailVerified = request.user?.email_verified;
   // @ts-ignore
   const userId = request.user?.uid;
   await admin.firestore().collection(USERS).doc(userId)
@@ -60,10 +61,14 @@ const checkUserEmailVerificationStatus = async (request: Request) :
 };
 
 export const addHousingCompanyToUser =
-  async (companyId: string, userId: string) => {
+  async (housingCompany: Company, userId: string) => {
     await admin.firestore().collection(USERS).doc(userId)
-        .update(
-            {[HOUSING_COMPANIES]: firestore.FieldValue.arrayUnion(companyId)},
+        .collection(HOUSING_COMPANIES).doc(housingCompany.id?? '')
+        .set(
+            {
+              id: housingCompany.id,
+              name: housingCompany.name,
+            },
         );
   };
 
@@ -79,8 +84,9 @@ export const getUserDisplayName =async (userId: string, companyId: string) => {
   return displayName;
 };
 
-export const retrieveUser = async (userId: string) => {
-  return (await admin.firestore().collection(USERS).doc(userId).get()).data();
+export const retrieveUser = async (userId: string) : Promise<User> => {
+  return (await admin.firestore().collection(USERS).doc(userId).get())
+      .data() as User;
 };
 
 export const changeUserPassword = async (req: Request, res: Response)=> {

@@ -106,7 +106,6 @@ const createUserOnFirestore = async (
     'is_active': true,
     'roles': roles,
     'notification_tokens': [],
-    'housing_companies': [],
   };
   await admin.firestore().collection(USERS).doc(userUid).set(user);
   return user;

@@ -5,6 +5,8 @@ export const APP_COLOR = '#FFCB73';
 export const HOUSING_COMPANIES = 'housing_companies';
 export const HOUSING_COMPANY = 'housing_company';
 export const NOTIFICATION_MESSAGES = 'notification_messages';
+export const NOTIFICATION_TOKENS = 'notification_tokens';
+export const TOKEN = 'token';
 export const APARTMENT = 'apartment';
 export const BANK_ACCOUNTS = 'bank_accounts';
 export const ANNOUNCEMENTS = 'announcements';
@@ -35,4 +37,5 @@ export const DEFAULT = 'default';
 export const ROLES = 'roles';
 export const IS_DELETED = 'is_deleted';
 export const COMPANY_MANAGER = 'Company manager';
-
+// eslint-disable-next-line max-len
+export const DEFAULT_WATER_BILL_TEMPLATE_ID = '1vobUwz1c5UlVdI-NmWcWrqLlozk2iiONhZuF73usJQ4';

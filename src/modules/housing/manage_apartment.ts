@@ -6,6 +6,7 @@ import {Apartment} from '../../dto/apartment';
 import {isCompanyManager}
   from '../authentication/authentication';
 import {addHousingCompanyToUser} from '../user/manage_user';
+import {getCompanyData} from './manage_housing_company';
 
 export const addApartmentRequest =
   async (request: Request, response: Response) => {
@@ -96,7 +97,10 @@ export const addTenantToApartment =
         await admin.firestore().collection(HOUSING_COMPANIES)
             .doc(housingCompanyId).collection(APARTMENTS).doc(apartmentId)
             .update({[TENANTS]: firestore.FieldValue.arrayUnion(userUid)});
-        await addHousingCompanyToUser(housingCompanyId, userUid);
+        const company = await getCompanyData(housingCompanyId);
+        if (company) {
+          await addHousingCompanyToUser(company, userUid);
+        }
       }
     };
 

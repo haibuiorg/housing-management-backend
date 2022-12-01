@@ -33,7 +33,7 @@ import {getSupportedContries} from './src/modules/country/manage_country';
 import {addCompanyBankAccountRequest, deleteCompanyBankAccountRequest, getCompanyBankAccountRequest}
   from './src/modules/payment/manage_payment';
 // eslint-disable-next-line max-len
-import {addUserNotificationToken, createNotificationChannels, deleteNotificationChannels, deleteNotificationToken, getNotificationChannels, getNotificationMessages, sendNotificationTest, setNotificationMessageSeen}
+import {addUserNotificationToken, createNotificationChannels, deleteCompanyNotificationChannels, deleteNotificationToken, getCompanyNotificationChannels, getNotificationMessages, sendNotificationTest, setNotificationMessageSeen, subscribeNotificationChannels}
   from './src/modules/notification/notification_service';
 import {sendPasswordResetEmail} from './src/modules/email/email_module';
 import {editAnnouncement, getAnnouncements, makeAnnouncement}
@@ -144,11 +144,13 @@ router.patch('/announcement',
 
 
 router.get('/notification_channels',
-    validateFirebaseIdToken, getNotificationChannels);
+    validateFirebaseIdToken, getCompanyNotificationChannels);
 router.post('/notification_channels',
     validateFirebaseIdToken, createNotificationChannels);
 router.delete('/notification_channels',
-    validateFirebaseIdToken, deleteNotificationChannels);
+    validateFirebaseIdToken, deleteCompanyNotificationChannels);
+router.post('/notification_channels/subscribe',
+    validateFirebaseIdToken, subscribeNotificationChannels);
 
 router.get('/notification_messsage',
     validateFirebaseIdToken, getNotificationMessages);

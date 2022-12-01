@@ -4,14 +4,13 @@ import admin from 'firebase-admin';
 import {addMultipleApartmentsInBuilding}
   from './manage_apartment';
 // eslint-disable-next-line max-len
-import {APARTMENTS, HOUSING_COMPANIES, HOUSING_COMPANY_ID, USERS}
+import {APARTMENTS, DEFAULT_WATER_BILL_TEMPLATE_ID, HOUSING_COMPANIES, HOUSING_COMPANY_ID, USERS}
   from '../../constants';
 import {Company} from '../../dto/company';
-import {isCompanyOwner, isCompanyTenant}
+import {isCompanyManager, isCompanyOwner, isCompanyTenant}
   from '../authentication/authentication';
 import {addHousingCompanyToUser} from '../user/manage_user';
-import {User} from '../../dto/user';
-import {isValidCountryCode} from '../country/manage_country';
+import {getCountryData, isValidCountryCode} from '../country/manage_country';
 import {UI} from '../../dto/ui';
 import {getPublicLinkForFile} from '../storage/manage_storage';
 
@@ -30,6 +29,9 @@ export const createHousingCompany =
 
       const housingCompanyId = admin.firestore().collection(HOUSING_COMPANIES)
           .doc().id;
+      const countryCode = request.body.country_code;
+      const companyCountry =
+          await getCountryData(countryCode?.toString() ?? 'fi');
       // @ts-ignore
       const userId = request.user?.uid;
       const housingCompany: Company = {
@@ -40,11 +42,15 @@ export const createHousingCompany =
         apartment_count: 0,
         tenant_count: 1,
         is_deleted: false,
+        currency_code: companyCountry.currency_code,
+        country_code: companyCountry.country_code,
+        vat: companyCountry.vat,
+        water_bill_template_id: DEFAULT_WATER_BILL_TEMPLATE_ID,
       };
       await admin.firestore().collection(HOUSING_COMPANIES)
           .doc(housingCompanyId)
           .set(housingCompany);
-      await addHousingCompanyToUser(housingCompanyId, userId);
+      await addHousingCompanyToUser(housingCompany, userId);
       const building = request.body.building;
       if (building) {
         const houseCodes = request.body.house_codes;
@@ -70,9 +76,10 @@ export const getHousingCompanies =
       try {
         // @ts-ignore
         const userId = request.user?.uid;
-        const user = (await admin.firestore()
-            .collection(USERS).doc(userId).get()).data() as User;
-        const companyIds = user.housing_companies;
+        const companyIds = (await admin.firestore()
+            .collection(USERS).doc(userId)
+            .collection(HOUSING_COMPANIES).listDocuments())
+            .map((doc) => doc.id);
         const result: (admin.firestore.DocumentData | undefined)[] = [];
         await Promise.all(companyIds.map(async (id) => {
           try {
@@ -160,6 +167,7 @@ export const updateHousingCompanyDetail =
       const companyBusinessId = request.body.business_id;
       const ui = request.body.ui;
       const isDeleted = request.body.is_deleted;
+      const waterBillTemplateId = request.body.water_bill_template_id;
       const company: Company = {
         is_deleted: false,
       };
@@ -199,6 +207,11 @@ export const updateHousingCompanyDetail =
       if (isDeleted) {
         if (await isCompanyOwner(userId, companyId)) {
           company.is_deleted = isDeleted;
+        }
+      }
+      if (waterBillTemplateId) {
+        if (await isCompanyManager(userId, companyId)) {
+          company.water_bill_template_id = waterBillTemplateId;
         }
       }
       try {

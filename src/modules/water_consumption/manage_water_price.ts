@@ -2,11 +2,11 @@ import {Request, Response} from 'express';
 import {WaterPrice} from '../../dto/water_price';
 import admin from 'firebase-admin';
 // eslint-disable-next-line max-len
-import {HOUSING_COMPANIES, WATER_PRICE, IS_ACTIVE, UPDATED_ON, HOUSING_COMPANY, WATER_CONSUMPTION_MANAGEMENT}
+import {HOUSING_COMPANIES, WATER_PRICE, IS_ACTIVE, UPDATED_ON, HOUSING_COMPANY, WATER_CONSUMPTION_MANAGEMENT, DEFAULT}
   from '../../constants';
 import {isCompanyManager, isCompanyTenant}
   from '../authentication/authentication';
-import {sendNotificationToCompany} from '../notification/notification_service';
+import {sendTopicNotification} from '../notification/notification_service';
 import {getUserDisplayName} from '../user/manage_user';
 
 export const addNewWaterPrice = async (request:Request, response: Response) => {
@@ -32,11 +32,12 @@ export const addNewWaterPrice = async (request:Request, response: Response) => {
       await admin.firestore()
           .collection(HOUSING_COMPANIES).doc(companyId)
           .collection(WATER_PRICE).doc(waterPriceId).set(waterPrice);
-      await sendNotificationToCompany(companyId, {
+      // TODO: create notification channels/topics
+      await sendTopicNotification(DEFAULT, {
         created_by: userId,
         display_name: distplayName,
         // eslint-disable-next-line max-len
-        body: 'New water price updated, now total basic fee is: ' + basicFee + company.currency_code + ' and price per cube is: ' + pricePerCube + company.country_code,
+        body: 'New water price updated, now total basic fee is: ' + basicFee + company.currency_code?.toUpperCase() + ' and price per cube is: ' + pricePerCube + company.currency_code?.toUpperCase(),
         app_route_location: '/' + HOUSING_COMPANY + '/' + companyId +
          '/' + WATER_CONSUMPTION_MANAGEMENT,
         title: 'New water price',
