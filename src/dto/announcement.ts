@@ -1,4 +1,5 @@
 import {FirebaseObject} from './firebase_object';
+import {StorageItem} from './storage_item';
 
 export interface Announcement extends FirebaseObject {
     id?: string,
@@ -10,5 +11,6 @@ export interface Announcement extends FirebaseObject {
     updated_by?: string,
     updated_on?: number,
     display_name?: string,
-    is_deleted?:boolean
+    is_deleted?:boolean,
+    storage_items?: StorageItem[]
 }

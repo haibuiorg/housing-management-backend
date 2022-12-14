@@ -56,8 +56,9 @@ export const inviteTenants = async (request: Request, response: Response) => {
   const emailAddresses = request.body.emails;
   // @ts-ignore
   const userId = request.user?.uid;
+  const company = await(isCompanyManager(userId, companyId));
   if (companyId && apartmentId &&
-    await(isCompanyManager(userId, companyId)) &&
+    company &&
     await(hasApartment(apartmentId, companyId))) {
     const invitationCodeId = admin.firestore().collection(INVITATION_CODES)
         .doc().id;
@@ -75,7 +76,10 @@ export const inviteTenants = async (request: Request, response: Response) => {
     await admin.firestore().collection(INVITATION_CODES)
         .doc(invitationCodeId).set(invitation);
     if (emailAddresses && emailAddresses.length > 0) {
-      sendInvitationEmail(emailAddresses, invitationCode);
+      sendInvitationEmail(
+          emailAddresses,
+          invitationCode,
+          companyId, company.name ?? '');
     }
     response.status(200).send(invitation);
     return;

@@ -5,4 +5,5 @@ export interface Country extends FirebaseObject {
     currency_code: string;
     id: string;
     vat: number;
+    free_tier_max_account: number,
 }

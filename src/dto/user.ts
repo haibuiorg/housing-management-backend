@@ -11,4 +11,6 @@ export interface User extends FirebaseObject {
     is_active: boolean,
     notification_tokens?: string[],
     phone?: string,
+    avatar_storage_location?: string,
+    avatar_url_expiration?: number,
 }

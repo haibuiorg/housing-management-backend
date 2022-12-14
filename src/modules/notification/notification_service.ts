@@ -12,6 +12,7 @@ import {isCompanyManager, isCompanyTenant} from '../authentication/authenticatio
 import {NotificationChannel} from '../../dto/notification_channel';
 import {MulticastMessage} from 'firebase-admin/lib/messaging/messaging-api';
 import {NotificationToken} from '../../dto/notification_token';
+import {getUserNotificationTokens} from '../user/manage_user';
 
 export const addUserNotificationToken = async (req: Request, res: Response)=> {
   try {
@@ -237,30 +238,10 @@ export const sendNotificationToCompany =
    sendNotificationToUsers(usersInCompany, dataPayload);
  };
 
-export const getUserNotificationToken =
- async (userIds: string[]) : Promise<string[]> => {
-   const result:string[] = [];
-   await Promise.all(userIds.map(async (id) => {
-     try {
-       const tokens = ((await admin.firestore()
-           .collection(USERS).doc(id)
-           .collection(NOTIFICATION_TOKENS)
-           .where(IS_VALID, '==', true).get())
-           .docs.map((doc) => doc.data().token));
-       result.push(...tokens ?? []);
-     } catch (error) {
-       console.log(error);
-     }
-   }));
-   return result.filter((element) => {
-     return element !== '';
-   });
- };
-
 export const sendNotificationToUsers = async (
     userIds: string[],
     dataPayload?: NotificationPayload) => {
-  const tokens = await getUserNotificationToken(userIds);
+  const tokens = await getUserNotificationTokens(userIds);
   await saveNotificationToUsers(userIds, dataPayload);
   sendTokenNotification(tokens, dataPayload);
 };

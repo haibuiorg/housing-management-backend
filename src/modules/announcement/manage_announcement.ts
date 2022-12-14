@@ -3,10 +3,17 @@ import {Announcement} from '../../dto/announcement';
 import {isCompanyManager, isCompanyTenant}
   from '../authentication/authentication';
 import admin from 'firebase-admin';
-import {ANNOUNCEMENTS, CREATED_ON, DEFAULT, HOUSING_COMPANIES, HOUSING_COMPANY}
+// eslint-disable-next-line max-len
+import {ANNOUNCEMENTS, CREATED_ON, DEFAULT, DOCUMENTS, HOUSING_COMPANIES, HOUSING_COMPANY}
   from '../../constants';
-import {getUserDisplayName} from '../user/manage_user';
+import {getUserDisplayName, getUserEmails} from '../user/manage_user';
 import {sendTopicNotification} from '../notification/notification_service';
+import {StorageItem} from '../../dto/storage_item';
+
+import {copyStorageFolder, getPublicLinkForFile}
+  from '../storage/manage_storage';
+import {sendAnnouncementEmail} from '../email/email_module';
+import {getCompanyTenantIds} from '../housing/manage_housing_company';
 
 export const makeAnnouncement = async (request:Request, response: Response) => {
   // @ts-ignore
@@ -25,6 +32,41 @@ export const makeAnnouncement = async (request:Request, response: Response) => {
     }
     const id = admin.firestore().collection(HOUSING_COMPANIES)
         .doc(companyId).collection(ANNOUNCEMENTS).doc().id;
+    const storageItems = request.body.storage_items;
+    const storageItemArray:StorageItem[] = [];
+    if (storageItems && storageItems.length > 0) {
+      const createdOn = new Date().getTime();
+      await Promise.all(storageItems.map(async (link: string) => {
+        try {
+          const lastPath = link.toString().split('/').at(-1);
+          const newFileLocation =
+                    // eslint-disable-next-line max-len
+                    `${HOUSING_COMPANIES}/${companyId}/announcement/${lastPath}`;
+          await copyStorageFolder(link, newFileLocation);
+          const expiration = (Date.now() + 604000);
+          const storageItem: StorageItem = {
+            type: 'announcement',
+            name: lastPath ?? '',
+            id: id, is_deleted: false,
+            uploaded_by: userId,
+            storage_link: newFileLocation,
+            created_on: createdOn,
+            presigned_url:
+              await getPublicLinkForFile(newFileLocation, expiration),
+            expired_on: expiration,
+          };
+          await admin.firestore().collection(HOUSING_COMPANIES)
+              .doc(companyId)
+              .collection(DOCUMENTS).doc(id).set(storageItem);
+          storageItemArray.push(storageItem);
+        } catch (error) {
+          response.status(500).send(
+              {errors: error},
+          );
+          console.log(error);
+        }
+      }));
+    }
     const userDisplayName = await getUserDisplayName(userId, companyId);
     const announcement : Announcement = {
       id: id,
@@ -35,6 +77,7 @@ export const makeAnnouncement = async (request:Request, response: Response) => {
       created_on: new Date().getTime(),
       display_name: userDisplayName,
       is_deleted: false,
+      storage_items: storageItemArray,
     };
     await admin.firestore().collection(HOUSING_COMPANIES)
         .doc(companyId).collection(ANNOUNCEMENTS).doc(id).set(announcement);
@@ -47,6 +90,14 @@ export const makeAnnouncement = async (request:Request, response: Response) => {
       display_name: userDisplayName,
       app_route_location: '/' + HOUSING_COMPANY + '/' + companyId,
     });
+    if (request.body.send_email) {
+      const usersInCompany = await getCompanyTenantIds(companyId, true, true);
+      const emails = await getUserEmails(usersInCompany);
+      sendAnnouncementEmail(
+          emails, userDisplayName,
+          title, subtitle, body,
+          storageItemArray.map((it) => (it.storage_link ?? '')) );
+    }
     return;
   }
   response.status(403).send({
@@ -108,7 +159,33 @@ const getAnnouncement =
       const announcement = (await admin.firestore()
           .collection(HOUSING_COMPANIES).doc(companyId)
           .collection(ANNOUNCEMENTS).doc(announcementId).get()).data();
-      return announcement;
+      if (announcement?.storage_items &&
+        announcement?.storage_items?.length > 0) {
+        const storageItems : StorageItem[] = [];
+        await Promise.all(announcement?.storage_items?.map(
+            async (item: StorageItem) => {
+              try {
+                if (item.created_on ?? 0 < new Date().getTime()) {
+                  item.created_on = new Date().getTime();
+                  const expiration = (Date.now() + 604000);
+                  item.presigned_url =
+                    await getPublicLinkForFile(
+                        item.storage_link ?? '', expiration);
+                  item.expired_on = expiration;
+                }
+              } catch (error) {
+                console.error(error);
+              }
+              storageItems.push(item);
+            }));
+        await admin.firestore()
+            .collection(HOUSING_COMPANIES).doc(companyId)
+            .collection(ANNOUNCEMENTS).doc(announcementId)
+            .update({storage_items: storageItems});
+        announcement.storage_items = storageItems;
+      }
+
+      return announcement as Announcement;
     };
 
 export const editAnnouncement = async (request:Request, response: Response) => {

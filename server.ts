@@ -5,7 +5,7 @@ import bodyParser from 'body-parser';
 import admin from 'firebase-admin';
 import {inviteTenants} from './src/modules/authentication/code_validation';
 // eslint-disable-next-line max-len
-import {createHousingCompany, getHousingCompanies, getHousingCompany, updateHousingCompanyDetail}
+import {addDocumentToCompany, createHousingCompany, getCompanyDocument, getCompanyDocuments, getHousingCompanies, getHousingCompany, joinWithCode, updateCompanyDocument, updateHousingCompanyDetail}
   from './src/modules/housing/manage_housing_company';
 import {registerWithCode, register}
   from './src/modules/authentication/register';
@@ -20,7 +20,7 @@ import {addConsumptionValue,
   startNewWaterConsumptionPeriod}
   from './src/modules/water_consumption/manage_water_consumption';
 // eslint-disable-next-line max-len
-import {addApartmentRequest, editApartmentRequest, getSingleApartmentRequest, getUserApartmentRequest}
+import {addApartmentRequest, addDocumentToApartment, editApartmentRequest, getApartmentDocument, getApartmentDocuments, getSingleApartmentRequest, getUserApartmentRequest, updateAparmentDocument}
   from './src/modules/housing/manage_apartment';
 import {getWaterBillRequest, getWaterBillByYearRequest, getWaterBillLinkRequest}
   from './src/modules/water_consumption/water_bill';
@@ -28,16 +28,22 @@ import {addNewWaterPrice, deleteWaterPrice, getActiveWaterPriceRequest}
   from './src/modules/water_consumption/manage_water_price';
 import {changeUserPassword, getUserData, updateUserData}
   from './src/modules/user/manage_user';
-import {getSupportedContries} from './src/modules/country/manage_country';
+// eslint-disable-next-line max-len
+import {getCountryByCountryCodeRequest, getCountryDataRequest, getSupportedContries}
+  from './src/modules/country/manage_country';
 // eslint-disable-next-line max-len
 import {addCompanyBankAccountRequest, deleteCompanyBankAccountRequest, getCompanyBankAccountRequest}
   from './src/modules/payment/manage_payment';
 // eslint-disable-next-line max-len
-import {addUserNotificationToken, createNotificationChannels, deleteCompanyNotificationChannels, deleteNotificationToken, getCompanyNotificationChannels, getNotificationMessages, sendNotificationTest, setNotificationMessageSeen, subscribeNotificationChannels}
+import {addUserNotificationToken, createNotificationChannels, deleteCompanyNotificationChannels, deleteNotificationToken, getCompanyNotificationChannels, getNotificationMessages, setNotificationMessageSeen, subscribeNotificationChannels}
   from './src/modules/notification/notification_service';
 import {sendPasswordResetEmail} from './src/modules/email/email_module';
-import {editAnnouncement, getAnnouncements, makeAnnouncement}
+// eslint-disable-next-line max-len
+import {editAnnouncement, getAnnouncementRequest, getAnnouncements, makeAnnouncement}
   from './src/modules/announcement/manage_announcement';
+// eslint-disable-next-line max-len
+import {getConversationRequest, joinConversationRequest, sendMessage, setConversationSeenRequest, startNewConversationRequest}
+  from './src/modules/messaging/manage_messaging';
 
 
 dotenv.config();
@@ -66,6 +72,10 @@ router.use(cors({
 router.post('/code_register', registerWithCode);
 router.get('/countries',
     getSupportedContries);
+router.get('/country', validateFirebaseIdToken,
+    getCountryDataRequest);
+router.get('/country/:country_code', validateFirebaseIdToken,
+    getCountryByCountryCodeRequest);
 router.post('/register', register);
 router.post('/reset_password', sendPasswordResetEmail);
 
@@ -94,6 +104,9 @@ router.get('/apartment', validateFirebaseIdToken, getSingleApartmentRequest);
 router.put('/apartment', validateFirebaseIdToken, editApartmentRequest);
 router.post('/apartments', validateFirebaseIdToken, addApartmentRequest);
 router.post('/apartments/invite', validateFirebaseIdToken, inviteTenants);
+router.post('/apartment/join_with_code',
+    validateFirebaseIdToken,
+    joinWithCode);
 
 router.post('/water_price', validateFirebaseIdToken, addNewWaterPrice);
 router.delete('/water_price', validateFirebaseIdToken, deleteWaterPrice);
@@ -135,8 +148,8 @@ router.delete('/bank_accounts',
 
 router.get('/announcement',
     validateFirebaseIdToken, getAnnouncements);
-router.get('/announcement/:announcementId',
-    validateFirebaseIdToken, getAnnouncements);
+router.get('/announcement/:announcement_id',
+    validateFirebaseIdToken, getAnnouncementRequest);
 router.post('/announcement',
     validateFirebaseIdToken, makeAnnouncement);
 router.patch('/announcement',
@@ -157,7 +170,35 @@ router.get('/notification_messsage',
 router.patch('/notification_messsage/seen',
     validateFirebaseIdToken, setNotificationMessageSeen);
 
-router.post('/test_notification', sendNotificationTest);
+// router.post('/test_notification', sendNotificationTest);
+
+router.post('/message', validateFirebaseIdToken, sendMessage);
+router.post('/start_conversation',
+    validateFirebaseIdToken, startNewConversationRequest);
+router.put('/join_conversation',
+    validateFirebaseIdToken, joinConversationRequest);
+router.put('/seen_conversation',
+    validateFirebaseIdToken, setConversationSeenRequest);
+router.get('/conversation', validateFirebaseIdToken, getConversationRequest);
+
+router.post('/housing_company/documents',
+    validateFirebaseIdToken, addDocumentToCompany);
+router.get('/housing_company/documents',
+    validateFirebaseIdToken, getCompanyDocuments);
+router.put('/housing_company/document/:document_id',
+    validateFirebaseIdToken, updateCompanyDocument);
+router.get('/housing_company/:housing_company_id/document/:document_id',
+    validateFirebaseIdToken, getCompanyDocument);
+
+router.post('/apartment/documents',
+    validateFirebaseIdToken, addDocumentToApartment);
+router.get('/apartment/documents',
+    validateFirebaseIdToken, getApartmentDocuments);
+router.put('/apartment/document/:document_id',
+    validateFirebaseIdToken, updateAparmentDocument);
+// eslint-disable-next-line max-len
+router.get('/housing_company/:housing_company_id/apartment/:apartment_id/document/:document_id',
+    validateFirebaseIdToken, getApartmentDocument);
 
 app.get('/', (req, res) => {
   res.status(404).send('Hello priorli!');

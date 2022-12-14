@@ -131,12 +131,18 @@ export const generateLatestWaterBill =
       const company = await getCompanyData(companyId.toString() ?? '');
       const id = company?.water_bill_template_id;
       const bankAccounts = await getBankAccounts(companyId.toString() ?? '');
+      const previousConsumptionValue =
+        (previousPeriodConsumption as WaterConsumption)
+            .consumption_values?.
+            find((value) =>
+              value.apartment_id === apartment.id)?.consumption ?? 0;
+      const differenceBetweenPeriod = consumption - previousConsumptionValue;
       await updateBillTemplate(
           company!,
           apartment as Apartment,
           waterConsumption as WaterConsumption,
           previousPeriodConsumption as WaterConsumption,
-          id?.toString() ??'', bankAccounts);
+          id?.toString() ??'', differenceBetweenPeriod, bankAccounts);
       const link =
         await generatePdf(
             id?.toString() ??'',
@@ -153,12 +159,12 @@ export const generateLatestWaterBill =
       const waterBillId = waterBillRef.doc().id;
       const invoiceValue =
           ((waterConsumption.basic_fee / (company?.apartment_count ?? 1)) +
-          (waterConsumption.price_per_cube* consumption)) *
+          (waterConsumption.price_per_cube * differenceBetweenPeriod)) *
           (1 +(company?.vat ?? 0));
       const waterBill = {
         id: waterBillId,
         url: link,
-        consumption: consumption,
+        consumption: differenceBetweenPeriod,
         housing_company_id: companyId,
         apartment_id: apartmentId,
         invoice_value: parseFloat(invoiceValue.toFixed(2)),
@@ -183,6 +189,7 @@ const updateBillTemplate =
       waterConsumption: WaterConsumption,
       previousPeriodConsumption: WaterConsumption,
       templateId: string,
+      differenceBetweenPeriod: number,
       bankAccounts?: BankAccount[]) => {
     const {google} = require('googleapis');
     const SCOPES = ['https://www.googleapis.com/auth/spreadsheets'];
@@ -199,9 +206,6 @@ const updateBillTemplate =
       companyStreetAddress + ' ' +
       apartment.building + ' ' +
       (apartment.house_code ?? '');
-    const consumption = waterConsumption
-        .consumption_values?.
-        find((value) => value.apartment_id === apartment.id)?.consumption ?? 0;
     const companyPostalCity = (company.postal_code ?? '') + ' ' +
       (company.city ?? '');
     const data = [
@@ -243,7 +247,7 @@ const updateBillTemplate =
       },
       {
         range: 'G15',
-        values: [[consumption]],
+        values: [[differenceBetweenPeriod]],
       },
       {
         range: 'G16',

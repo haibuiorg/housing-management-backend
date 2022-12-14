@@ -1,10 +1,10 @@
 'use strict';
 import {Request, Response} from 'express';
 import admin from 'firebase-admin';
-import {addMultipleApartmentsInBuilding}
+import {addMultipleApartmentsInBuilding, addTenantToApartment, getUserApartment}
   from './manage_apartment';
 // eslint-disable-next-line max-len
-import {APARTMENTS, DEFAULT_WATER_BILL_TEMPLATE_ID, HOUSING_COMPANIES, HOUSING_COMPANY_ID, USERS}
+import {APARTMENTS, CREATED_ON, DEFAULT, DEFAULT_FREE_TIER_MAX_COUNT, DEFAULT_WATER_BILL_TEMPLATE_ID, DOCUMENTS, HOUSING_COMPANIES, HOUSING_COMPANY_ID, IS_DELETED, USERS}
   from '../../constants';
 import {Company} from '../../dto/company';
 import {isCompanyManager, isCompanyOwner, isCompanyTenant}
@@ -12,7 +12,10 @@ import {isCompanyManager, isCompanyOwner, isCompanyTenant}
 import {addHousingCompanyToUser} from '../user/manage_user';
 import {getCountryData, isValidCountryCode} from '../country/manage_country';
 import {UI} from '../../dto/ui';
-import {getPublicLinkForFile} from '../storage/manage_storage';
+import {copyStorageFolder, getPublicLinkForFile}
+  from '../storage/manage_storage';
+import {codeValidation, removeCode} from '../authentication/code_validation';
+import {StorageItem} from '../../dto/storage_item';
 
 export const createHousingCompany =
     async (request: Request, response: Response) => {
@@ -42,6 +45,7 @@ export const createHousingCompany =
         apartment_count: 0,
         tenant_count: 1,
         is_deleted: false,
+        max_account_count: companyCountry.free_tier_max_account,
         currency_code: companyCountry.currency_code,
         country_code: companyCountry.country_code,
         vat: companyCountry.vat,
@@ -50,7 +54,7 @@ export const createHousingCompany =
       await admin.firestore().collection(HOUSING_COMPANIES)
           .doc(housingCompanyId)
           .set(housingCompany);
-      await addHousingCompanyToUser(housingCompany, userId);
+      await addHousingCompanyToUser(housingCompanyId, userId);
       const building = request.body.building;
       if (building) {
         const houseCodes = request.body.house_codes;
@@ -87,17 +91,31 @@ export const getHousingCompanies =
                 .collection(HOUSING_COMPANIES).doc(id).get())
                 .data() as Company);
             if (data && !data.is_deleted) {
+              const expiration = (Date.now() + 604000);
               if (data.cover_image_storage_link &&
-                  data.cover_image_storage_link.toString().length> 0) {
+                  data.cover_image_storage_link.toString().length> 0 &&
+                  (data.cover_image_url_expiration ?? Date.now()) <= Date.now()
+              ) {
                 const coverImageUrl =
-                      await getPublicLinkForFile(data.cover_image_storage_link);
+                      await getPublicLinkForFile(data.cover_image_storage_link,
+                          expiration);
                 data.cover_image_url = coverImageUrl;
+                await admin.firestore()
+                    .collection(HOUSING_COMPANIES).doc(id)
+                    .update({cover_image_url: coverImageUrl,
+                      cover_image_url_expiration: expiration});
               }
               if (data.logo_storage_link &&
-                data.logo_storage_link.toString().length> 0) {
+                data.logo_storage_link.toString().length> 0 &&
+                (data.logo_url_expiration ?? Date.now()) <= Date.now()) {
                 const logoUrl =
-                    await getPublicLinkForFile(data.logo_storage_link);
+                    await getPublicLinkForFile(
+                        data.logo_storage_link, expiration);
                 data.logo_url = logoUrl;
+                await admin.firestore()
+                    .collection(HOUSING_COMPANIES).doc(id)
+                    .update({logo_url: logoUrl,
+                      logo_url_expiration: expiration});
               }
               result.push(data);
             }
@@ -168,6 +186,8 @@ export const updateHousingCompanyDetail =
       const ui = request.body.ui;
       const isDeleted = request.body.is_deleted;
       const waterBillTemplateId = request.body.water_bill_template_id;
+      const coverImageStorageLink = request.body.cover_image_storage_link;
+      const logoStorageLink = request.body.logo_storage_link;
       const company: Company = {
         is_deleted: false,
       };
@@ -209,11 +229,36 @@ export const updateHousingCompanyDetail =
           company.is_deleted = isDeleted;
         }
       }
-      if (waterBillTemplateId) {
-        if (await isCompanyManager(userId, companyId)) {
+      if (await isCompanyManager(userId, companyId)) {
+        const expiration = (Date.now() + 604000);
+        if (waterBillTemplateId) {
           company.water_bill_template_id = waterBillTemplateId;
         }
+        if (coverImageStorageLink) {
+          const lastPath = coverImageStorageLink.toString().split('/').at(-1);
+          const newFileLocation =
+              `public/companies/${companyId}/cover/${lastPath}`;
+          await copyStorageFolder(
+              coverImageStorageLink, newFileLocation);
+          company.cover_image_storage_link = newFileLocation;
+          company.cover_image_url =
+            await getPublicLinkForFile(newFileLocation, expiration);
+          company.cover_image_url_expiration = expiration;
+        }
+        if (logoStorageLink) {
+          const lastPath = logoStorageLink.toString().split('/').at(-1);
+          const newFileLocation =
+              `public/companies/${companyId}/logo/${lastPath}`;
+          await copyStorageFolder(
+              logoStorageLink, newFileLocation);
+          company.logo_storage_link = newFileLocation;
+          company.logo_url =
+            await getPublicLinkForFile(logoStorageLink, expiration);
+          company.logo_url_expiration = expiration;
+        }
       }
+
+
       try {
         await admin.firestore().collection(HOUSING_COMPANIES)
             .doc(companyId).update(company);
@@ -266,3 +311,184 @@ export const getCompanyTenantIds =
     return [...new Set(tenants)];
   };
 
+export const joinWithCode =
+  async (request: Request, response: Response) => {
+    const invitationCode = request.body.invitation_code;
+    const housingCompanyId = request.body.housing_company_id;
+    const apartmentId : string = await codeValidation(
+        invitationCode, housingCompanyId);
+    if (apartmentId.length === 0) {
+      const error = {'errors': {'code': 500, 'message': 'Invalid code'}};
+      console.log(error);
+      response.status(500).send(error);
+      return;
+    }
+    try {
+      const company = await getCompanyData(housingCompanyId);
+      console.log(company);
+      if (
+        (company?.tenant_count ?? 1) >=
+        (company?.max_account_count ?? DEFAULT_FREE_TIER_MAX_COUNT)) {
+        const error = {'errors':
+          {'code': 500, 'message': 'Max account number reached'}};
+        console.log(error);
+        response.status(500).send(error);
+        return;
+      }
+      // @ts-ignore
+      const userId = request.user?.uid;
+      await addTenantToApartment(
+          userId, housingCompanyId, apartmentId);
+      await removeCode(invitationCode, housingCompanyId, userId);
+      const apartment =
+          await getUserApartment(userId, housingCompanyId, apartmentId);
+      response.status(200).send(apartment);
+    } catch (errors) {
+      console.error(errors);
+      response.status(500).send({'errors': errors});
+      return;
+    }
+    return;
+  };
+
+export const addDocumentToCompany =
+  async (request: Request, response: Response ) => {
+    // @ts-ignore
+    const userId = request.user?.uid;
+    const companyId = request.body?.housing_company_id;
+    const company = await isCompanyManager(userId, companyId);
+    if (!company) {
+      response.status(403).send(
+          {errors: {error: 'Unauthorized', code: 'not_manager'}},
+      );
+      return;
+    }
+    const type = request.body?.type?.toString() ?? DEFAULT;
+    const storageItems = request.body.storage_items;
+    const storageItemArray:StorageItem[] = [];
+    if (storageItems && storageItems.length > 0) {
+      const createdOn = new Date().getTime();
+      await Promise.all(storageItems.map(async (link: string) => {
+        try {
+          const lastPath = link.toString().split('/').at(-1);
+          const newFileLocation =
+                `${HOUSING_COMPANIES}/${companyId}/${type}/${lastPath}`;
+          await copyStorageFolder(link, newFileLocation);
+          const id = admin.firestore().collection(HOUSING_COMPANIES)
+              .doc(companyId).collection(DOCUMENTS).doc().id;
+          const storageItem: StorageItem = {
+            type: type,
+            name: lastPath ?? '',
+            id: id, is_deleted: false, uploaded_by: userId,
+            storage_link: newFileLocation, created_on: createdOn,
+          };
+          await admin.firestore().collection(HOUSING_COMPANIES)
+              .doc(companyId).collection(DOCUMENTS).doc(id).set(storageItem);
+          storageItemArray.push(storageItem);
+        } catch (error) {
+          response.status(500).send(
+              {errors: error},
+          );
+          console.log(error);
+        }
+      }));
+    }
+    response.status(200).send(storageItemArray);
+  };
+
+export const getCompanyDocuments =
+  async (request:Request, response: Response) => {
+    // @ts-ignore
+    const userId = request.user?.uid;
+    const companyId = request.query?.housing_company_id;
+    const isTenant =
+      await isCompanyTenant(
+          userId,
+          companyId?.toString() ?? '',
+      );
+    if (!isTenant) {
+      response.status(403).send(
+          {errors: {error: 'Unauthorized', code: 'not_tenant'}},
+      );
+      return;
+    }
+    let basicRef = admin.firestore()
+        .collection(HOUSING_COMPANIES).doc(companyId?.toString() ?? '')
+        .collection(DOCUMENTS)
+        .where(IS_DELETED, '==', false);
+    const type = request.query.type;
+    if (type) {
+      basicRef = basicRef.where('type', '==', type.toString());
+    }
+    const documents = (await basicRef.orderBy(CREATED_ON, 'desc').get())
+        .docs.map((doc) => doc.data());
+    response.status(200).send(documents);
+  };
+
+export const updateCompanyDocument =
+  async (request:Request, response: Response) => {
+    // @ts-ignore
+    const userId = request.user?.uid;
+    const companyId = request.body?.housing_company_id;
+    const isTenant =
+      await isCompanyManager(
+          userId,
+          companyId?.toString() ?? '',
+      );
+    if (!isTenant) {
+      response.status(403).send(
+          {errors: {error: 'Unauthorized', code: 'not_tenant'}},
+      );
+      return;
+    }
+    const updatedFile: StorageItem = {
+    };
+    if (request.body?.is_deleted) {
+      updatedFile.is_deleted = request.body?.is_deleted;
+    }
+    if (request.body?.name) {
+      updatedFile.name = request.body?.name;
+    }
+    const docId = request.params?.document_id;
+    await admin.firestore()
+        .collection(HOUSING_COMPANIES).doc(companyId?.toString() ?? '')
+        .collection(DOCUMENTS).doc(docId).update(updatedFile);
+    const basicRef = admin.firestore()
+        .collection(HOUSING_COMPANIES).doc(companyId?.toString() ?? '')
+        .collection(DOCUMENTS)
+        .doc(docId);
+    const document = (await basicRef.get()).data();
+    response.status(200).send(document);
+  };
+
+
+export const getCompanyDocument =
+  async (request:Request, response: Response) => {
+    // @ts-ignore
+    const userId = request.user?.uid;
+    const companyId = request.params?.housing_company_id;
+    const docId = request.params?.document_id;
+    const isTenant =
+      await isCompanyTenant(
+          userId,
+          companyId?.toString() ?? '',
+      );
+    if (!isTenant) {
+      response.status(403).send(
+          {errors: {error: 'Unauthorized', code: 'not_tenant'}},
+      );
+      return;
+    }
+    const document = (await admin.firestore()
+        .collection(HOUSING_COMPANIES).doc(companyId?.toString() ?? '')
+        .collection(DOCUMENTS).doc(docId).get()).data() as StorageItem;
+    if (document?.expired_on ?? 0 < new Date().getTime()) {
+      document.expired_on = new Date().getTime();
+      document.presigned_url =
+        await getPublicLinkForFile(document.storage_link ?? '');
+      admin.firestore()
+          .collection(HOUSING_COMPANIES).doc(companyId?.toString() ?? '')
+          .collection(DOCUMENTS).doc(docId).update(document);
+    }
+    response.status(200).send(document);
+  };

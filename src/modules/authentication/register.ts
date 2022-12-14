@@ -3,23 +3,17 @@ import {isValidEmail} from '../../strings_utils';
 import {sendVerificationEmail} from '../email/email_module';
 import {Request, Response} from 'express';
 import {codeValidation, removeCode} from './code_validation';
-import {DEFAULT, USERS}
+import {DEFAULT, DEFAULT_FREE_TIER_MAX_COUNT, USERS}
   from '../../constants';
 import {addTenantToApartment} from '../housing/manage_apartment';
+import {getCompanyData} from '../housing/manage_housing_company';
 
 export const registerWithCode =
     async (request: Request, response: Response) => {
-      const email = request.body.email;
-      if (!isValidEmail(email)) {
-        const error = {'errors': {'code': 500, 'message': 'Invalid email'}};
-        response.status(500).send(error);
-        return;
-      }
       const invitationCode = request.body.invitation_code;
       const housingCompanyId = request.body.housing_company_id;
       const apartmentId : string = await codeValidation(
           invitationCode, housingCompanyId);
-
       if (apartmentId.length === 0) {
         const error = {'errors': {'code': 500, 'message': 'Invalid code'}};
         response.status(500).send(error);
@@ -28,6 +22,21 @@ export const registerWithCode =
 
       const pass = request.body.password;
       try {
+        const company = await getCompanyData(housingCompanyId);
+        if (
+          (company?.tenant_count ?? 1) >=
+          (company?.max_account_count ?? DEFAULT_FREE_TIER_MAX_COUNT)) {
+          const error = {'errors':
+            {'code': 500, 'message': 'Max account number reached'}};
+          response.status(500).send(error);
+          return;
+        }
+        const email = request.body.email;
+        if (!isValidEmail(email)) {
+          const error = {'errors': {'code': 500, 'message': 'Invalid email'}};
+          response.status(500).send(error);
+          return;
+        }
         const userRecord = await admin.auth().createUser({
           email: email,
           password: pass,
@@ -41,6 +50,7 @@ export const registerWithCode =
         response.status(200).send(user);
         sendVerificationEmail(email);
       } catch (errors) {
+        console.error(errors);
         response.status(500).send({'errors': errors});
         return;
       }

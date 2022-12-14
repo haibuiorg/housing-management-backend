@@ -16,12 +16,18 @@ export interface Company extends FirebaseObject {
     owners?: string[];
     managers?: string[];
     apartment_count?: number;
+    tenant_count?: number;
+    max_account_count?: number;
     water_bill_template_id?: string;
     business_id?: string,
     ui?: UI,
     is_deleted: boolean;
     vat?: number;
     cover_image_url?: string;
+    cover_image_url_expiration?: number;
+    cover_image_storage_link?: string;
     logo_url?: string;
+    logo_storage_link?: string;
+    logo_url_expiration?: number;
     notification_channels?: NotificationChannel[]
 }

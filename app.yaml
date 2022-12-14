@@ -4,3 +4,4 @@ env_variables:
   SERVICE_ACCOUNT_PATH: "../service-account-key.json"
   SENDGRID: "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"
   FIREBASE_WEB_API_KEY: "AIzaSyCXYtcxvEb1dYpLv2q-uDZYQBEnyHqv-zY"
+  REGISTER_CODE_KEY: "81P11pJtw1i5O0vRWr5IsX2k76N499l4"

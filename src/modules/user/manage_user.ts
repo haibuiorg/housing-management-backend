@@ -1,9 +1,12 @@
 import {Request, Response} from 'express';
 import admin from 'firebase-admin';
-import {COMPANY_MANAGER, HOUSING_COMPANIES, USERS} from '../../constants';
-import {Company} from '../../dto/company';
+// eslint-disable-next-line max-len
+import {COMPANY_MANAGER, HOUSING_COMPANIES, IS_VALID, NOTIFICATION_TOKENS, USERS}
+  from '../../constants';
 import {User} from '../../dto/user';
 import {isCompanyManager} from '../authentication/authentication';
+import {copyStorageFolder, getPublicLinkForFile}
+  from '../storage/manage_storage';
 
 export const getUserData = async (request: Request, response: Response) => {
   // @ts-ignore
@@ -12,6 +15,20 @@ export const getUserData = async (request: Request, response: Response) => {
   if (user) {
     if (!user.email_verified) {
       user.email_verified = await checkUserEmailVerificationStatus(request);
+    }
+    if ((user.avatar_url_expiration ?? Date.now()) <= Date.now() &&
+      (user.avatar_storage_location?.length ?? 0) > 0) {
+      const expiration = (Date.now() + 604000);
+      // @ts-ignore
+      const avatarUrl =
+        await getPublicLinkForFile(
+            user.avatar_storage_location ?? '', expiration);
+      await admin.firestore().collection(USERS).doc(userId).update({
+        avatar_url: avatarUrl,
+        avatar_url_expiration: expiration,
+      });
+      user.avatar_url = avatarUrl;
+      user.avatar_url_expiration = expiration;
     }
     response.status(200).send(user);
     return;
@@ -26,6 +43,7 @@ export const updateUserData = async (request: Request, response: Response) => {
   const firstName = request.body.first_name;
   const lastName = request.body.last_name;
   const phone = request.body.phone;
+  const avatarStorageLocation = request.body.avatar_storage_location;
 
   const updateField = {};
   if (firstName) {
@@ -40,6 +58,20 @@ export const updateUserData = async (request: Request, response: Response) => {
     // @ts-ignore
     updateField.phone = phone;
   }
+  if (avatarStorageLocation) {
+    const lastPath = avatarStorageLocation.toString().split('/').at(-1);
+    const newFileLocation = `public/users/${userId}/avatar/${lastPath}`;
+    await copyStorageFolder(
+        avatarStorageLocation, newFileLocation);
+    // @ts-ignore
+    updateField.avatar_storage_location = newFileLocation;
+    const expiration = (Date.now() + 604000);
+    // @ts-ignore
+    updateField.avatar_url =
+      await getPublicLinkForFile(newFileLocation, expiration);
+    // @ts-ignore
+    updateField.avatar_url_expiration = expiration;
+  }
   try {
     await admin.firestore().collection(USERS).doc(userId).update(updateField);
     const user = await retrieveUser(userId);
@@ -48,6 +80,46 @@ export const updateUserData = async (request: Request, response: Response) => {
     response.status(500).send({errors: errors});
   }
 };
+
+export const getUserNotificationTokens =
+ async (userIds: string[]) : Promise<string[]> => {
+   const result:string[] = [];
+   await Promise.all(userIds.map(async (id) => {
+     try {
+       const tokens = ((await admin.firestore()
+           .collection(USERS).doc(id)
+           .collection(NOTIFICATION_TOKENS)
+           .where(IS_VALID, '==', true).get())
+           .docs.map((doc) => doc.data().token));
+       result.push(...tokens ?? []);
+     } catch (error) {
+       console.log(error);
+     }
+   }));
+   return result.filter((element) => {
+     return element !== '';
+   });
+ };
+
+export const getUserEmails =
+ async (userIds: string[]) : Promise<string[]> => {
+   const result:string[] = [];
+   await Promise.all(userIds.map(async (id) => {
+     try {
+       const email =
+        (await admin.firestore().collection(USERS).doc(id).get()
+        )?.data()?.email;
+       if (email) {
+         result.push(email);
+       }
+     } catch (error) {
+       console.log(error);
+     }
+   }));
+   return result.filter((element) => {
+     return element !== '';
+   });
+ };
 
 const checkUserEmailVerificationStatus = async (request: Request) :
   Promise<boolean> => {
@@ -61,13 +133,12 @@ const checkUserEmailVerificationStatus = async (request: Request) :
 };
 
 export const addHousingCompanyToUser =
-  async (housingCompany: Company, userId: string) => {
+  async (housingCompanyId: string, userId: string) => {
     await admin.firestore().collection(USERS).doc(userId)
-        .collection(HOUSING_COMPANIES).doc(housingCompany.id?? '')
+        .collection(HOUSING_COMPANIES).doc(housingCompanyId)
         .set(
             {
-              id: housingCompany.id,
-              name: housingCompany.name,
+              id: housingCompanyId,
             },
         );
   };

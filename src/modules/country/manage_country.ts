@@ -22,6 +22,18 @@ export const getSupportedContries =
       }
     };
 
+export const getCountryDataRequest =
+    async (request: Request, response: Response) => {
+      try {
+        const id = request.query.id?.toString() ?? '';
+        const country = ((await admin.firestore()
+            .collection(COUNTRIES).doc(id).get())).data() as Country;
+        response.status(200).send(country);
+      } catch (error) {
+        response.status(500).send({errors: error});
+      }
+    };
+
 export const getCountryData =
     async (countryCode: string) : Promise<Country> => {
       try {
@@ -36,6 +48,18 @@ export const getCountryData =
           country_code: 'fi',
           currency_code: 'eur',
           vat: 0.24,
+          free_tier_max_account: 4,
         } as Country;
+      }
+    };
+
+export const getCountryByCountryCodeRequest =
+    async (request: Request, response: Response) => {
+      try {
+        const countryCode = request.params.country_code;
+        const country = await getCountryData(countryCode);
+        response.status(200).send(country);
+      } catch (error) {
+        response.status(500).send({errors: error});
       }
     };

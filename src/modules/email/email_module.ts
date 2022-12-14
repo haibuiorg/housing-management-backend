@@ -2,11 +2,12 @@
 import {Request, Response} from 'express';
 import admin from 'firebase-admin';
 const sgMail = require('@sendgrid/mail');
+const axios = require('axios').default;
 
 export const sendVerificationEmail = async (email: string) => {
   const verifyLink = await admin.auth().generateEmailVerificationLink(email);
   const msg = {
-    to: email, // Change to your recipient
+    to: email,
     from: {
       email: 'contact@kierr.co',
       name: 'Priorli App',
@@ -22,23 +23,97 @@ export const sendVerificationEmail = async (email: string) => {
   await sgMail.send(msg);
 };
 
-export const sendInvitationEmail = async (email: string[], code: string) => {
-  const msg = {
-    to: email, // Change to your recipient
-    from: {
-      email: 'contact@kierr.co',
-      name: 'Priorli App',
-    },
-    subject: 'Create account with Priorli App',
-    html: `Hello\,
-        <br>Use this code: "${code}"
-         to create user and get access to your housing company.<br>
+export const sendAnnouncementEmail =
+  async (emails: string[],
+      displayName: string,
+      title: string,
+      subtitle: string,
+      body:string,
+      storageItems: string[]): Promise<void> => {
+    const fileList:
+    { content: string; filename: string; disposition: string; }[] = [];
+    await Promise.all(storageItems.map(async (item: string) => {
+      const [url] = await admin.storage().bucket()
+          .file(item).download();
+      fileList.push({
+        content: url.toString('base64'),
+        filename: item,
+        disposition: 'attachment',
+      });
+    }));
+
+
+    const msg = {
+      to: emails, // Change to your recipient
+      from: {
+        email: 'contact@kierr.co',
+        name: displayName,
+      },
+      attachments: fileList,
+      subject: `${title}`,
+      html: `Hello\,
+      <br>
+      <br>
+      ${subtitle}
+      <br>
+      ${body}
+     `,
+    };
+    sgMail.setApiKey(process.env.SENDGRID);
+    await sgMail.send(msg, true);
+  };
+
+export const sendInvitationEmail =
+  async (email: string[],
+      code: string,
+      companyId: string,
+      companyName:string) => {
+    const apiKey = process.env.FIREBASE_WEB_API_KEY;
+    const link = 'https://priorli.com/code_register/' + companyId + '/' + code;
+    const linkData = {
+      'dynamicLinkInfo': {
+        'domainUriPrefix': 'https://priorli.page.link',
+        'link': link,
+        'androidInfo': {
+          'androidPackageName': 'com.priorli.priorli',
+        },
+        'iosInfo': {
+          'iosBundleId': 'com.priorli.priorli',
+        },
+      },
+    };
+    const url = 'https://firebasedynamiclinks.googleapis.com/v1/shortLinks?key=' + apiKey;
+    let links = {
+      shortLink: '',
+    };
+    try {
+      console.log(url);
+      console.log(linkData);
+      links= (await axios.post(url, linkData)).data;
+    } catch (error) {
+      console.error(error);
+    }
+    console.log(links);
+    const msg = {
+      to: email, // Change to your recipient
+      from: {
+        email: 'contact@kierr.co',
+        name: 'Priorli App',
+      },
+      subject: 'Create account with Priorli App',
+      html: `Hello\,
+        <br>
+        <br> To create user and get access to ${companyName} housing company.
+        <br>Click on this link: ${links.shortLink}
+        <br>Or copy this code to register
+        <h4><b>${companyId}/${code}</b></h4>
+        <br>
         <br>Thank you and enjoy our app,
         <br>Your Priorli app team`,
+    };
+    sgMail.setApiKey(process.env.SENDGRID);
+    await sgMail.send(msg, true);
   };
-  sgMail.setApiKey(process.env.SENDGRID);
-  await sgMail.send(msg, true);
-};
 
 export const sendPasswordResetEmail =
   async (request: Request, response: Response) => {
