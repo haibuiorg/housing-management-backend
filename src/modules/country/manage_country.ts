@@ -43,12 +43,15 @@ export const getCountryData =
         return country;
       } catch (error) {
         console.error(error);
+        const id = admin.firestore()
+            .collection(COUNTRIES).doc().id;
         return {
-          id: 'vZb0f3cm6jYPI6UaGEQf',
+          id: id,
           country_code: 'fi',
           currency_code: 'eur',
           vat: 0.24,
           free_tier_max_account: 4,
+          support_languages: ['fi', 'en'],
         } as Country;
       }
     };
