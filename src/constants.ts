@@ -12,6 +12,7 @@ export const BANK_ACCOUNTS = 'bank_accounts';
 export const ANNOUNCEMENTS = 'announcements';
 export const COUNTRIES = 'countries';
 export const COUNTRY_CODE = 'country_code';
+export const LANGUAGE_CODE = 'language_code';
 export const TENANTS = 'tenants';
 export const APARTMENTS = 'apartments';
 export const WATER_BILLS = 'water_bills';
@@ -44,5 +45,8 @@ export const COMMUNITY_MESSAGE_TYPE = 'community';
 export const SUPPORT_MESSAGE_TYPE = 'support';
 export const CONVERSATIONS = 'conversations';
 export const MESSAGES = 'messages';
-export const DEFAULT_FREE_TIER_MAX_COUNT = 4;
+export const DEFAULT_FREE_TIER_MAX_COUNT = 3;
 export const DOCUMENTS = 'documents';
+
+export const MAX_CONVERSATION_PER_USER = 'max_conversation_per_user';
+export const DEFAULT_MAX_CONVERSATION_PER_USER = 5;

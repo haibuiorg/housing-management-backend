@@ -1,7 +1,7 @@
 import {Request, Response} from 'express';
 import admin, {firestore} from 'firebase-admin';
 // eslint-disable-next-line max-len
-import {COMMUNITY_MESSAGE_TYPE, CONVERSATIONS, HOUSING_COMPANIES, MESSAGES, SUPPORT_CHANNELS, SUPPORT_MESSAGE_TYPE}
+import {COMMUNITY_MESSAGE_TYPE, CONVERSATIONS, COUNTRY_CODE, DEFAULT_MAX_CONVERSATION_PER_USER, HOUSING_COMPANIES, LANGUAGE_CODE, MAX_CONVERSATION_PER_USER, MESSAGES, SUPPORT_CHANNELS, SUPPORT_MESSAGE_TYPE}
   from '../../constants';
 import {StorageItem} from '../../dto/storage_item';
 import {Conversation} from '../../dto/conversation';
@@ -253,13 +253,13 @@ export const startNewConversationRequest =
       const type = request.body?.type;
       // @ts-ignore
       const userId = request.user?.uid;
-      const channelIdOrCompanyId = request.body.channel_id?.toString() ?? '';
-      if (!type || !channelIdOrCompanyId) {
+      if (!type) {
         response.status(500).send(
             {errors: {message: 'Missing value', code: 'missing_value'}});
         return;
       }
       if (type === COMMUNITY_MESSAGE_TYPE) {
+        const channelIdOrCompanyId = request.body.channel_id?.toString() ?? '';
         const company = await isCompanyManager(userId, channelIdOrCompanyId);
         if (!company) {
           response.status(403).send(
@@ -288,15 +288,48 @@ export const startNewConversationRequest =
             .collection(CONVERSATIONS).doc(conversationId).set(conversation);
         response.status(200).send(conversation);
       } else if (type === SUPPORT_MESSAGE_TYPE) {
+        let channelId = request.body.channel_id?.toString() ?? '';
+        if (channelId.length === 0) {
+          const countryCode = request.body.country_code?.toString() ?? '';
+          const languageCode = request.body.language_code?.toString() ?? '';
+          const channel = (await admin.firestore().collection(SUPPORT_CHANNELS)
+              .where(COUNTRY_CODE, '==', countryCode)
+              .where(LANGUAGE_CODE, '==', languageCode).limit(1).get())
+              .docs.map((doc) => doc.data())[0];
+          if (!channel) {
+            const error = {errors: {message: 'Something wrong',
+              code: 'missing_country_data'}};
+            console.error(error);
+            response.status(500).send(error);
+            return;
+          }
+          channelId = channel.id;
+          const userConversation = await admin.firestore()
+              .collection(SUPPORT_CHANNELS).doc(channelId)
+              .collection(CONVERSATIONS)
+              .where('user_ids', 'array-contains', userId)
+              .count().get();
+          if (userConversation >=
+                  (channel[MAX_CONVERSATION_PER_USER] ??
+                     DEFAULT_MAX_CONVERSATION_PER_USER)) {
+            const error = {errors: {message: 'Something wrong',
+              code: 'max_number_conversation_reach'}};
+            console.error(error);
+            response.status(500).send(
+                {errors: {message: 'Something wrong',
+                  code: 'max_number_conversation_reach'}});
+            return;
+          }
+        }
         const name = request.body.name?.toString() ??
             userId + '_' + new Date().getTime();
         const conversationId = admin.firestore()
-            .collection(HOUSING_COMPANIES).doc(channelIdOrCompanyId)
+            .collection(SUPPORT_CHANNELS).doc(channelId)
             .collection(CONVERSATIONS).doc().id;
         const createdOn = new Date().getTime();
         const conversation: Conversation = {
           id: conversationId,
-          channel_id: channelIdOrCompanyId,
+          channel_id: channelId,
           name: name,
           type: type,
           status: 'pending',
@@ -305,7 +338,7 @@ export const startNewConversationRequest =
           user_ids: [userId],
         };
         await admin.firestore()
-            .collection(SUPPORT_CHANNELS).doc(channelIdOrCompanyId)
+            .collection(SUPPORT_CHANNELS).doc(channelId)
             .collection(CONVERSATIONS).doc(conversationId).set(conversation);
         response.status(200).send(conversation);
       } else {
@@ -314,3 +347,4 @@ export const startNewConversationRequest =
               code: 'invalid_type'}});
       }
     };
+

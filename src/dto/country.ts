@@ -6,4 +6,6 @@ export interface Country extends FirebaseObject {
     id: string;
     vat: number;
     free_tier_max_account: number,
+    support_languages: string[],
+    support_phone_number: string
 }

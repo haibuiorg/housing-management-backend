@@ -147,16 +147,29 @@ export const getHousingCompany =
             .docs.map((doc) => doc.data());
         const data = companies[0] as Company;
         if (data.cover_image_storage_link &&
-              data.cover_image_storage_link.toString().length> 0) {
+              data.cover_image_storage_link.toString().length> 0 &&
+              (data.cover_image_url_expiration ?? Date.now()) <= Date.now()) {
+          const expiration = (Date.now() + 604000);
           const coverImageUrl =
-                  await getPublicLinkForFile(data.cover_image_storage_link);
+                  await getPublicLinkForFile(
+                      data.cover_image_storage_link, expiration);
           data.cover_image_url = coverImageUrl;
+          admin.firestore()
+              .collection(HOUSING_COMPANIES).doc(companyId?.toString() ?? '')
+              .update({cover_image_url: coverImageUrl,
+                cover_image_url_expiration: expiration});
         }
         if (data.logo_storage_link &&
-            data.logo_storage_link.toString().length> 0) {
+            data.logo_storage_link.toString().length> 0 &&
+            (data.logo_url_expiration ?? Date.now()) <= Date.now()) {
+          const expiration = (Date.now() + 604000);
           const logoUrl =
-                await getPublicLinkForFile(data.logo_storage_link);
+                await getPublicLinkForFile(data.logo_storage_link, expiration);
           data.logo_url = logoUrl;
+          admin.firestore()
+              .collection(HOUSING_COMPANIES).doc(companyId?.toString() ?? '')
+              .update({logo_url: logoUrl,
+                logo_url_expiration: expiration});
         }
         response.status(200).send(data);
       } catch (errors) {
@@ -262,8 +275,8 @@ export const updateHousingCompanyDetail =
       try {
         await admin.firestore().collection(HOUSING_COMPANIES)
             .doc(companyId).update(company);
-        company.id = companyId;
-        response.status(200).send({result: true});
+        const newComapny = await getCompanyData(companyId);
+        response.status(200).send(newComapny);
       } catch (errors) {
         response.status(500).send({errors: errors});
       };
