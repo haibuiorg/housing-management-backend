@@ -9,13 +9,14 @@ import {APARTMENTS, CREATED_ON, DEFAULT, DEFAULT_FREE_TIER_MAX_COUNT, DEFAULT_WA
 import {Company} from '../../dto/company';
 import {isCompanyManager, isCompanyOwner, isCompanyTenant}
   from '../authentication/authentication';
-import {addHousingCompanyToUser} from '../user/manage_user';
+import {addHousingCompanyToUser, retrieveUser} from '../user/manage_user';
 import {getCountryData, isValidCountryCode} from '../country/manage_country';
 import {UI} from '../../dto/ui';
 import {copyStorageFolder, getPublicLinkForFile}
   from '../storage/manage_storage';
 import {codeValidation, removeCode} from '../authentication/code_validation';
 import {StorageItem} from '../../dto/storage_item';
+import {User} from '../../dto/user';
 
 export const createHousingCompany =
     async (request: Request, response: Response) => {
@@ -55,6 +56,8 @@ export const createHousingCompany =
           .doc(housingCompanyId)
           .set(housingCompany);
       await addHousingCompanyToUser(housingCompanyId, userId);
+      housingCompany.is_user_owner = true;
+      housingCompany.is_user_manager = true;
       const building = request.body.building;
       if (building) {
         const houseCodes = request.body.house_codes;
@@ -171,8 +174,15 @@ export const getHousingCompany =
               .update({logo_url: logoUrl,
                 logo_url_expiration: expiration});
         }
+        data.is_user_owner =
+          await isCompanyOwner(userId, companyId?.toString() ?? '') !==
+            undefined;
+        data.is_user_manager =
+          await isCompanyManager(userId, companyId?.toString() ?? '') !==
+            undefined;
         response.status(200).send(data);
       } catch (errors) {
+        console.log(errors);
         response.status(500).send({errors: errors});
       }
     };
@@ -181,12 +191,15 @@ export const updateHousingCompanyDetail =
       const companyId = request.body.housing_company_id;
       // @ts-ignore
       const userId = request.user?.uid;
-      if (!isCompanyOwner(userId, companyId)) {
+      const company = await isCompanyManager(userId, companyId);
+
+      if (!company) {
         response.status(403).send(
-            {errors: {error: 'Unauthorized', code: 'not_owner'}},
+            {errors: {error: 'Unauthorized', code: 'not_manager'}},
         );
         return;
       }
+      const isOwner = await isCompanyOwner(userId, companyId);
       const streetAddress1 = request.body.street_address_1;
       const streetAddress2 = request.body.street_address_2;
       const postalCode = request.body.postal_code;
@@ -201,9 +214,6 @@ export const updateHousingCompanyDetail =
       const waterBillTemplateId = request.body.water_bill_template_id;
       const coverImageStorageLink = request.body.cover_image_storage_link;
       const logoStorageLink = request.body.logo_storage_link;
-      const company: Company = {
-        is_deleted: false,
-      };
       if (streetAddress1) {
         company.street_address_1 = streetAddress1;
       }
@@ -238,46 +248,45 @@ export const updateHousingCompanyDetail =
         company.ui = (ui as UI);
       }
       if (isDeleted) {
-        if (await isCompanyOwner(userId, companyId)) {
+        if (isOwner) {
           company.is_deleted = isDeleted;
         }
       }
-      if (await isCompanyManager(userId, companyId)) {
-        const expiration = (Date.now() + 604000);
-        if (waterBillTemplateId) {
-          company.water_bill_template_id = waterBillTemplateId;
-        }
-        if (coverImageStorageLink) {
-          const lastPath = coverImageStorageLink.toString().split('/').at(-1);
-          const newFileLocation =
-              `public/companies/${companyId}/cover/${lastPath}`;
-          await copyStorageFolder(
-              coverImageStorageLink, newFileLocation);
-          company.cover_image_storage_link = newFileLocation;
-          company.cover_image_url =
-            await getPublicLinkForFile(newFileLocation, expiration);
-          company.cover_image_url_expiration = expiration;
-        }
-        if (logoStorageLink) {
-          const lastPath = logoStorageLink.toString().split('/').at(-1);
-          const newFileLocation =
-              `public/companies/${companyId}/logo/${lastPath}`;
-          await copyStorageFolder(
-              logoStorageLink, newFileLocation);
-          company.logo_storage_link = newFileLocation;
-          company.logo_url =
-            await getPublicLinkForFile(logoStorageLink, expiration);
-          company.logo_url_expiration = expiration;
-        }
+      const expiration = (Date.now() + 604000);
+      if (waterBillTemplateId) {
+        company.water_bill_template_id = waterBillTemplateId;
       }
-
-
+      if (coverImageStorageLink) {
+        const lastPath = coverImageStorageLink.toString().split('/').at(-1);
+        const newFileLocation =
+            `public/companies/${companyId}/cover/${lastPath}`;
+        await copyStorageFolder(
+            coverImageStorageLink, newFileLocation);
+        company.cover_image_storage_link = newFileLocation;
+        company.cover_image_url =
+          await getPublicLinkForFile(newFileLocation, expiration);
+        company.cover_image_url_expiration = expiration;
+      }
+      if (logoStorageLink) {
+        const lastPath = logoStorageLink.toString().split('/').at(-1);
+        const newFileLocation =
+            `public/companies/${companyId}/logo/${lastPath}`;
+        await copyStorageFolder(
+            logoStorageLink, newFileLocation);
+        company.logo_storage_link = newFileLocation;
+        company.logo_url =
+          await getPublicLinkForFile(logoStorageLink, expiration);
+        company.logo_url_expiration = expiration;
+      }
       try {
         await admin.firestore().collection(HOUSING_COMPANIES)
             .doc(companyId).update(company);
         const newComapny = await getCompanyData(companyId);
+        newComapny!.is_user_owner = isOwner !== undefined;
+        newComapny!.is_user_manager = true;
         response.status(200).send(newComapny);
       } catch (errors) {
+        console.log(errors);
         response.status(500).send({errors: errors});
       };
     };
@@ -324,6 +333,43 @@ export const getCompanyTenantIds =
     return [...new Set(tenants)];
   };
 
+export const getCompanyUserRequest =
+  async (request:Request, response: Response) => {
+    // @ts-ignore
+    const userId = request.user?.uid;
+    const companyId = request.params.companyId;
+    if ( ! await isCompanyTenant(userId, companyId)) {
+      response.status(403).send({
+        errors: {error: 'Not tenant', code: 'not_tenant'},
+      });
+      return;
+    }
+    try {
+      const users = await getCompanyUserDetails(companyId);
+      response.status(200).send(users);
+    } catch (errors) {
+      console.log(errors);
+      response.sendStatus(404);
+    }
+  };
+
+
+const getCompanyUserDetails =
+  async (housingCompanyId:string) : Promise<User[]> => {
+    const userIds : string[] = (await admin.firestore()
+        .collectionGroup(HOUSING_COMPANIES)
+        .where('id', '==', housingCompanyId).where('user_id', '!=', null).get())
+        .docs.map((doc) => {
+          return doc.ref.parent.parent?.id ?? '';
+        });
+    const users: User[] = [];
+    await Promise.all(userIds.map(async (id) => {
+      const user = await retrieveUser(id);
+      users.push(user);
+    }));
+    return users;
+  };
+
 export const joinWithCode =
   async (request: Request, response: Response) => {
     const invitationCode = request.body.invitation_code;
@@ -338,7 +384,6 @@ export const joinWithCode =
     }
     try {
       const company = await getCompanyData(housingCompanyId);
-      console.log(company);
       if (
         (company?.tenant_count ?? 1) >=
         (company?.max_account_count ?? DEFAULT_FREE_TIER_MAX_COUNT)) {
@@ -433,9 +478,28 @@ export const getCompanyDocuments =
     if (type) {
       basicRef = basicRef.where('type', '==', type.toString());
     }
-    const documents = (await basicRef.orderBy(CREATED_ON, 'desc').get())
-        .docs.map((doc) => doc.data());
-    response.status(200).send(documents);
+    let limit = 3;
+    if (request.query?.limit) {
+      limit = parseInt(request.query?.limit?.toString() ?? '3');
+    }
+    if (request.query?.last_created_on) {
+      const lastItemCreatedTime = parseInt(
+          request.query?.last_created_on?.toString() ??
+        (new Date().getTime().toString())) ??
+        new Date().getTime();
+      const documents = (
+        await basicRef.orderBy(CREATED_ON, 'desc')
+            .startAfter(lastItemCreatedTime)
+            .limit(limit).get())
+          .docs.map((doc) => doc.data());
+      response.status(200).send(documents);
+    } else {
+      const documents = (
+        await basicRef.orderBy(CREATED_ON, 'desc')
+            .limit(limit).get())
+          .docs.map((doc) => doc.data());
+      response.status(200).send(documents);
+    }
   };
 
 export const updateCompanyDocument =

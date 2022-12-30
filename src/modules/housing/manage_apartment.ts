@@ -358,9 +358,28 @@ export const getApartmentDocuments =
     if (type) {
       basicRef = basicRef.where('type', '==', type.toString());
     }
-    const documents = (await basicRef.orderBy(CREATED_ON, 'desc').get())
-        .docs.map((doc) => doc.data());
-    response.status(200).send(documents);
+    let limit = 3;
+    if (request.query?.limit) {
+      limit = parseInt(request.query?.limit?.toString() ?? '3');
+    }
+    if (request.query?.last_created_on) {
+      const lastItemCreatedTime = parseInt(
+          request.query?.last_created_on?.toString() ??
+        (new Date().getTime().toString())) ??
+        new Date().getTime();
+      const documents = (
+        await basicRef.orderBy(CREATED_ON, 'desc')
+            .startAfter(lastItemCreatedTime)
+            .limit(limit).get())
+          .docs.map((doc) => doc.data());
+      response.status(200).send(documents);
+    } else {
+      const documents = (
+        await basicRef.orderBy(CREATED_ON, 'desc')
+            .limit(limit).get())
+          .docs.map((doc) => doc.data());
+      response.status(200).send(documents);
+    }
   };
 
 export const deleteApartmentDocuments =

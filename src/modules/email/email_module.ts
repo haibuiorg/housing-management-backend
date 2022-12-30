@@ -87,13 +87,10 @@ export const sendInvitationEmail =
       shortLink: '',
     };
     try {
-      console.log(url);
-      console.log(linkData);
       links= (await axios.post(url, linkData)).data;
     } catch (error) {
       console.error(error);
     }
-    console.log(links);
     const msg = {
       to: email, // Change to your recipient
       from: {

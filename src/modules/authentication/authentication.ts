@@ -72,8 +72,6 @@ export const isAuthorizedAccessToApartment =
               .collection(HOUSING_COMPANIES)
               .doc(companyId).collection(APARTMENTS).doc(apartmentId)
               .get();
-
-          console.log(adminApartment.data());
           return adminApartment.data();
         }
         return undefined;

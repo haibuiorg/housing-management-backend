@@ -5,7 +5,7 @@ import bodyParser from 'body-parser';
 import admin from 'firebase-admin';
 import {inviteTenants} from './src/modules/authentication/code_validation';
 // eslint-disable-next-line max-len
-import {addDocumentToCompany, createHousingCompany, getCompanyDocument, getCompanyDocuments, getHousingCompanies, getHousingCompany, joinWithCode, updateCompanyDocument, updateHousingCompanyDetail}
+import {addDocumentToCompany, createHousingCompany, getCompanyDocument, getCompanyDocuments, getCompanyUserRequest, getHousingCompanies, getHousingCompany, joinWithCode, updateCompanyDocument, updateHousingCompanyDetail}
   from './src/modules/housing/manage_housing_company';
 import {registerWithCode, register}
   from './src/modules/authentication/register';
@@ -44,6 +44,12 @@ import {editAnnouncement, getAnnouncementRequest, getAnnouncements, makeAnnounce
 // eslint-disable-next-line max-len
 import {getConversationRequest, joinConversationRequest, sendMessage, setConversationSeenRequest, startNewConversationRequest}
   from './src/modules/messaging/manage_messaging';
+// eslint-disable-next-line max-len
+import {addPollOption, createPoll, editPoll, getPoll, getPolls, removePollOption, selectPollOption}
+  from './src/modules/poll/poll-service';
+// eslint-disable-next-line max-len
+import {createEvents, editEvent, getEvent, getEvents, removeFromFromEvent, responseToEvent}
+  from './src/modules/events/event-service';
 
 
 dotenv.config();
@@ -183,6 +189,8 @@ router.get('/conversation', validateFirebaseIdToken, getConversationRequest);
 
 router.post('/housing_company/documents',
     validateFirebaseIdToken, addDocumentToCompany);
+router.get('/housing_company/:companyId/users',
+    validateFirebaseIdToken, getCompanyUserRequest);
 router.get('/housing_company/documents',
     validateFirebaseIdToken, getCompanyDocuments);
 router.put('/housing_company/document/:document_id',
@@ -199,6 +207,24 @@ router.put('/apartment/document/:document_id',
 // eslint-disable-next-line max-len
 router.get('/housing_company/:housing_company_id/apartment/:apartment_id/document/:document_id',
     validateFirebaseIdToken, getApartmentDocument);
+
+router.get('/polls', validateFirebaseIdToken, getPolls);
+router.get('/poll/:pollId', validateFirebaseIdToken, getPoll);
+router.post('/poll', validateFirebaseIdToken, createPoll);
+router.put('/poll/:pollId', validateFirebaseIdToken, editPoll);
+router.put('/poll/:pollId/remove', validateFirebaseIdToken, removePollOption);
+router.put('/poll/:pollId/add', validateFirebaseIdToken, addPollOption);
+router.put('/poll/:pollId/select', validateFirebaseIdToken, selectPollOption);
+
+router.get('/events', validateFirebaseIdToken, getEvents);
+router.get('/event/:eventId', validateFirebaseIdToken, getEvent);
+router.post('/event', validateFirebaseIdToken, createEvents);
+router.put('/event/:eventId', validateFirebaseIdToken, editEvent);
+router.put('/event/:eventId/response',
+    validateFirebaseIdToken, responseToEvent);
+router.put('/event/:eventId/remove_users',
+    validateFirebaseIdToken, removeFromFromEvent);
+
 
 app.get('/', (req, res) => {
   res.status(404).send('Hello priorli!');

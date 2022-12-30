@@ -16,20 +16,6 @@ export const getUserData = async (request: Request, response: Response) => {
     if (!user.email_verified) {
       user.email_verified = await checkUserEmailVerificationStatus(request);
     }
-    if ((user.avatar_url_expiration ?? Date.now()) <= Date.now() &&
-      (user.avatar_storage_location?.length ?? 0) > 0) {
-      const expiration = (Date.now() + 604000);
-      // @ts-ignore
-      const avatarUrl =
-        await getPublicLinkForFile(
-            user.avatar_storage_location ?? '', expiration);
-      await admin.firestore().collection(USERS).doc(userId).update({
-        avatar_url: avatarUrl,
-        avatar_url_expiration: expiration,
-      });
-      user.avatar_url = avatarUrl;
-      user.avatar_url_expiration = expiration;
-    }
     response.status(200).send(user);
     return;
   }
@@ -138,6 +124,7 @@ export const addHousingCompanyToUser =
         .collection(HOUSING_COMPANIES).doc(housingCompanyId)
         .set(
             {
+              user_id: userId,
               id: housingCompanyId,
             },
         );
@@ -156,8 +143,23 @@ export const getUserDisplayName =async (userId: string, companyId: string) => {
 };
 
 export const retrieveUser = async (userId: string) : Promise<User> => {
-  return (await admin.firestore().collection(USERS).doc(userId).get())
+  const user = (await admin.firestore().collection(USERS).doc(userId).get())
       .data() as User;
+  if ((user.avatar_url_expiration ?? Date.now()) <= Date.now() &&
+        (user.avatar_storage_location?.length ?? 0) > 0) {
+    const expiration = (Date.now() + 604000);
+    // @ts-ignore
+    const avatarUrl =
+          await getPublicLinkForFile(
+              user.avatar_storage_location ?? '', expiration);
+    await admin.firestore().collection(USERS).doc(userId).update({
+      avatar_url: avatarUrl,
+      avatar_url_expiration: expiration,
+    });
+    user.avatar_url = avatarUrl;
+    user.avatar_url_expiration = expiration;
+  }
+  return user;
 };
 
 export const changeUserPassword = async (req: Request, res: Response)=> {

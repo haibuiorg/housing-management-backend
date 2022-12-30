@@ -50,3 +50,6 @@ export const DOCUMENTS = 'documents';
 
 export const MAX_CONVERSATION_PER_USER = 'max_conversation_per_user';
 export const DEFAULT_MAX_CONVERSATION_PER_USER = 5;
+
+export const EVENTS = 'events';
+export const POLLS = 'polls';

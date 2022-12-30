@@ -1,7 +1,7 @@
 import {Request, Response} from 'express';
 import admin, {firestore} from 'firebase-admin';
 // eslint-disable-next-line max-len
-import {COMMUNITY_MESSAGE_TYPE, CONVERSATIONS, COUNTRY_CODE, DEFAULT_MAX_CONVERSATION_PER_USER, HOUSING_COMPANIES, LANGUAGE_CODE, MAX_CONVERSATION_PER_USER, MESSAGES, SUPPORT_CHANNELS, SUPPORT_MESSAGE_TYPE}
+import {APP_COLOR, COMMUNITY_MESSAGE_TYPE, CONVERSATIONS, COUNTRY_CODE, DEFAULT_MAX_CONVERSATION_PER_USER, HOUSING_COMPANIES, LANGUAGE_CODE, MAX_CONVERSATION_PER_USER, MESSAGES, SUPPORT_CHANNELS, SUPPORT_MESSAGE_TYPE}
   from '../../constants';
 import {StorageItem} from '../../dto/storage_item';
 import {Conversation} from '../../dto/conversation';
@@ -84,6 +84,7 @@ export const sendMessage =
             sendNotificationToUsers(sendNotificationUserList, {
               title: conversation.name,
               body: message,
+              color: APP_COLOR,
               app_route_location: '/message/' +
                     conversation.type + '/' + conversation.channel_id + '/' +
                     conversation.id,
