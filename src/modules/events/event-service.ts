@@ -16,7 +16,7 @@ export const getEvents =async (request:Request, response: Response) => {
     apartment_id,
     types,
     include_past_event = false,
-    last_created_on = new Date().getTime(),
+    last_created_on,
     from = new Date().getTime() - 31556952000,
     to = new Date().getTime() + 31556952000,
     limit,
@@ -24,6 +24,9 @@ export const getEvents =async (request:Request, response: Response) => {
   } = request.query;
   let query = admin.firestore().collection(EVENTS)
       .where('start_time', '>=', from).where('start_time', '<=', to);
+  const isManager =
+      await isCompanyManager(userId, company_id?.toString()?? '') ||
+      await isAdminRole(userId);
   if (!company_id && !apartment_id) {
     query = query
         .where('invitees', 'array-contains', userId?.toString());
@@ -31,14 +34,9 @@ export const getEvents =async (request:Request, response: Response) => {
     if (company_id) {
       const tenants =
            await getUserApartments(userId, company_id?.toString()?? '');
-      const isManager =
-              await isCompanyManager(userId, company_id?.toString()?? '') ||
-              await isAdminRole(userId);
+
       const hasAccessToCompany = tenants.length> 0 || isManager;
-      if (!hasAccessToCompany ||
-              ( types &&
-                (types as string[]).includes('company_internal') &&
-                 !isManager)) {
+      if (!hasAccessToCompany) {
         response.status(500).send({
           'errors': {
             'error': 'no_company_found',
@@ -69,10 +67,14 @@ export const getEvents =async (request:Request, response: Response) => {
     }
   }
   if (types) {
+    const processTypes : string[] = !isManager ? (types as string[])
+        .filter((value) => value != 'company_internal') :
+        !isAdminRole ? (types as string[])
+            .filter((value) => value != 'generic') : types as string[];
     query = query ?
-          query.where('type', 'in', types as string[]):
+          query.where('type', 'in', processTypes):
           admin.firestore().collection(EVENTS)
-              .where('type', 'in', types as string[]);
+              .where('type', 'in', processTypes);
   }
 
   if (!include_past_event) {

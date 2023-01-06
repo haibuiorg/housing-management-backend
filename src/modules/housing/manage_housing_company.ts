@@ -17,6 +17,9 @@ import {copyStorageFolder, getPublicLinkForFile}
 import {codeValidation, removeCode} from '../authentication/code_validation';
 import {StorageItem} from '../../dto/storage_item';
 import {User} from '../../dto/user';
+import {isValidEmail} from '../../strings_utils';
+import {createUserWithEmail} from '../authentication/register';
+import {sendManagerAccountCreatedEmail} from '../email/email_module';
 
 export const createHousingCompany =
     async (request: Request, response: Response) => {
@@ -294,9 +297,36 @@ export const updateHousingCompanyDetail =
 
 export const getCompanyData =
     async (companyId:string): Promise<Company|undefined> => {
-      const company = await admin.firestore()
-          .collection(HOUSING_COMPANIES).doc(companyId).get();
-      return company?.data() as Company;
+      const company = (await admin.firestore()
+          .collection(HOUSING_COMPANIES).doc(companyId).get())
+          .data() as Company;
+      const expiration = (Date.now() + 604000);
+      if (company.cover_image_storage_link &&
+            company.cover_image_storage_link.toString().length> 0 &&
+              (company.cover_image_url_expiration ?? Date.now()) <= Date.now()
+      ) {
+        const coverImageUrl =
+                  await getPublicLinkForFile(company.cover_image_storage_link,
+                      expiration);
+        company.cover_image_url = coverImageUrl;
+        await admin.firestore()
+            .collection(HOUSING_COMPANIES).doc(companyId)
+            .update({cover_image_url: coverImageUrl,
+              cover_image_url_expiration: expiration});
+      }
+      if (company.logo_storage_link &&
+        company.logo_storage_link.toString().length> 0 &&
+            (company.logo_url_expiration ?? Date.now()) <= Date.now()) {
+        const logoUrl =
+                await getPublicLinkForFile(
+                    company.logo_storage_link, expiration);
+        company.logo_url = logoUrl;
+        await admin.firestore()
+            .collection(HOUSING_COMPANIES).doc(companyId)
+            .update({logo_url: logoUrl,
+              logo_url_expiration: expiration});
+      }
+      return company;
     };
 
 export const hasApartment =
@@ -353,6 +383,14 @@ export const getCompanyUserRequest =
     }
   };
 
+export const retrieveUsers =async (userIds: string[]) => {
+  const users: User[] = [];
+  await Promise.all(userIds.map(async (id) => {
+    const user = await retrieveUser(id);
+    users.push(user);
+  }));
+  return users;
+};
 
 const getCompanyUserDetails =
   async (housingCompanyId:string) : Promise<User[]> => {
@@ -362,6 +400,37 @@ const getCompanyUserDetails =
         .docs.map((doc) => {
           return doc.ref.parent.parent?.id ?? '';
         });
+    return await retrieveUsers(userIds);
+  };
+
+export const getCompanyManagerRequest =
+  async (request: Request, response: Response) => {
+    // @ts-ignore
+    const userId = request.user?.uid;
+    const housingCompanyId = request.params.companyId;
+    const company = await isCompanyManager(userId, housingCompanyId);
+    if (!company) {
+      response.status(403).send(
+          {errors: {error: 'Unauthorized', code: 'not_manager'}},
+      );
+      return;
+    }
+    try {
+      const users = await getCompanyManagerDetails(housingCompanyId);
+      response.status(200).send(users);
+    } catch (errors) {
+      console.log(errors);
+      response.status(500).send({errors: errors});
+    }
+  };
+
+export const getCompanyManagerDetails =
+  async (housingCompanyId:string) : Promise<User[]> => {
+    const company = ((await admin.firestore()
+        .collection(HOUSING_COMPANIES).doc(housingCompanyId)
+        .get()).data() as Company);
+    const userIds : string[] =
+        [...new Set([...company.managers ?? [], ...company.owners ?? []])];
     const users: User[] = [];
     await Promise.all(userIds.map(async (id) => {
       const user = await retrieveUser(id);
@@ -569,3 +638,65 @@ export const getCompanyDocument =
     }
     response.status(200).send(document);
   };
+
+export const addNewManager = async (request:Request, response: Response) => {
+  // @ts-ignore
+  const userId = request.user?.uid;
+  const companyId = request.body?.housing_company_id;
+  const companyOwner = await isCompanyOwner(userId, companyId);
+  if (!companyOwner) {
+    response.status(403).send({'errors': 'not_owner'});
+    return;
+  }
+  const email = request.body.email;
+  if (!isValidEmail(email)) {
+    const error = {'errors': {'code': 500, 'message': 'Invalid email'}};
+    response.status(500).send(error);
+    return;
+  }
+  let addingUserId;
+  try {
+    const existUser = await admin.auth().getUserByEmail(email);
+    addingUserId = existUser.uid;
+    return;
+  } catch (error) {
+    console.log(error);
+  }
+
+
+  try {
+    if (!addingUserId) {
+      const firstName = request.body.first_name;
+      const lastName = request.body.last_name;
+      const phone = request.body.phone;
+      const user = await createUserWithEmail(email, firstName, lastName, phone);
+      addingUserId = user?.user_id;
+      if (!user) {
+        response.status(500).send({'errors': 'unknown'});
+        return;
+      }
+    }
+    if (!addingUserId) {
+      response.status(500).send({'errors': 'unknown'});
+      return;
+    }
+    const managers =
+      [...new Set([...companyOwner.managers ?? [], ...[addingUserId]])];
+    console.log(managers);
+    await addHousingCompanyToUser(companyId, addingUserId);
+    await admin.firestore().collection(HOUSING_COMPANIES)
+        .doc(companyId).update({managers: managers});
+    const updatedUser = await retrieveUser(addingUserId);
+    response.status(200).send(updatedUser);
+    sendManagerAccountCreatedEmail(
+        email,
+      companyOwner!.name ?? 'Housing company');
+  } catch (errors) {
+    console.log(errors);
+    response.status(500).send({'errors': errors});
+    return;
+  }
+};
+
+export const resendInviteEmail =
+  async (request:Request, response: Response) => {};

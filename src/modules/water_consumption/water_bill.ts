@@ -146,10 +146,10 @@ export const generateLatestWaterBill =
       const link =
         await generatePdf(
             id?.toString() ??'',
-            'housing_companies/' + companyId + '/' +
+            HOUSING_COMPANIES + '/' + companyId + '/' +
             apartmentId + '/water_bills' +
-             '/' + waterConsumption.year +
-             '/' + waterConsumption.period +
+             '/' + waterConsumption?.year +
+             '/' + waterConsumption?.period +
             '.pdf',
         );
       const waterBillRef = admin.firestore().
@@ -158,8 +158,9 @@ export const generateLatestWaterBill =
           collection(WATER_BILLS);
       const waterBillId = waterBillRef.doc().id;
       const invoiceValue =
-          ((waterConsumption.basic_fee / (company?.apartment_count ?? 1)) +
-          (waterConsumption.price_per_cube * differenceBetweenPeriod)) *
+          (((waterConsumption?.basic_fee ?? 0) /
+            (company?.apartment_count ?? 1)) +
+          ((waterConsumption?.price_per_cube ?? 0) * differenceBetweenPeriod)) *
           (1 +(company?.vat ?? 0));
       const waterBill = {
         id: waterBillId,
@@ -169,8 +170,8 @@ export const generateLatestWaterBill =
         apartment_id: apartmentId,
         invoice_value: parseFloat(invoiceValue.toFixed(2)),
         currency_code: company?.currency_code ?? '',
-        year: parseInt(waterConsumption.year),
-        period: parseInt(waterConsumption.period),
+        year: parseInt(waterConsumption?.year),
+        period: parseInt(waterConsumption?.period),
         created_on: new Date().getTime(),
       };
       await waterBillRef.doc(waterBillId).set(waterBill);

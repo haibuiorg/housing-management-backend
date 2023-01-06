@@ -1,3 +1,4 @@
+import {Address} from './address';
 import {FirebaseObject} from './firebase_object';
 
 export interface User extends FirebaseObject {
@@ -13,4 +14,5 @@ export interface User extends FirebaseObject {
     phone?: string,
     avatar_storage_location?: string,
     avatar_url_expiration?: number,
+    addresses?: Address[]
 }

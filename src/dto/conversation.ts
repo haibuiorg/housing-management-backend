@@ -9,6 +9,6 @@ export interface Conversation extends FirebaseObject {
     is_archived?: boolean;
     created_on?: number,
     updated_on?: number,
-    status?: string,
+    status?: 'pending' | 'ongoing' | 'closed',
     last_message_not_seen_by?: string[],
 }

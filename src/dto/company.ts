@@ -1,3 +1,4 @@
+import {Address} from './address';
 import {FirebaseObject} from './firebase_object';
 import {NotificationChannel} from './notification_channel';
 import {UI} from './ui';
@@ -29,5 +30,6 @@ export interface Company extends FirebaseObject {
     logo_url?: string;
     logo_storage_link?: string;
     logo_url_expiration?: number;
-    notification_channels?: NotificationChannel[]
+    notification_channels?: NotificationChannel[],
+    address?: Address[],
 }

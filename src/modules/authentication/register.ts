@@ -7,6 +7,18 @@ import {DEFAULT, DEFAULT_FREE_TIER_MAX_COUNT, USERS}
   from '../../constants';
 import {addTenantToApartment} from '../housing/manage_apartment';
 import {getCompanyData} from '../housing/manage_housing_company';
+import crypto from 'crypto';
+import {User} from '../../dto/user';
+
+const generatePassword = (
+    length = 20,
+    wishlist =
+    '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz~!@-#$',
+) =>
+  Array.from(crypto.randomFillSync(new Uint32Array(length)))
+      .map((x) => wishlist[x % wishlist.length])
+      .join('');
+
 
 export const registerWithCode =
     async (request: Request, response: Response) => {
@@ -96,8 +108,36 @@ export const register =
       return;
     };
 
+export const createUserWithEmail =
+  async (
+      email: string,
+      firstName? : string,
+      lastName?: string,
+      phone?: string) : Promise<User|undefined> => {
+    if (!isValidEmail(email)) {
+      return undefined;
+    }
+    const pass = generatePassword();
+    try {
+      const userRecord = await admin.auth().createUser({
+        email: email,
+        password: pass,
+        emailVerified: false,
+      });
 
-const createUserOnFirestore = async (
+      const user = await createUserOnFirestore(
+          userRecord.uid, email, [DEFAULT],
+          firstName ?? '',
+          lastName ?? '',
+          phone ?? '');
+      return user;
+    } catch (errors) {
+      return undefined;
+    }
+  };
+
+
+export const createUserOnFirestore = async (
     userUid: string,
     email: string,
     roles: string[],

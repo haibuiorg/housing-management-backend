@@ -1,7 +1,7 @@
 export const INVITATION_CODES = 'invitation_codes';
 export const USERS = 'users';
 export const APP_NAME = 'Priorli App';
-export const APP_COLOR = '#FFCB73';
+export const APP_COLOR = '#008DB9';
 export const HOUSING_COMPANIES = 'housing_companies';
 export const HOUSING_COMPANY = 'housing_company';
 export const NOTIFICATION_MESSAGES = 'notification_messages';
@@ -42,6 +42,7 @@ export const COMPANY_MANAGER = 'Company manager';
 export const DEFAULT_WATER_BILL_TEMPLATE_ID = '1vobUwz1c5UlVdI-NmWcWrqLlozk2iiONhZuF73usJQ4';
 export const SUPPORT_CHANNELS = 'support_channels';
 export const COMMUNITY_MESSAGE_TYPE = 'community';
+export const FAULT_REPORT_MESSAGE_TYPE = 'fault_report';
 export const SUPPORT_MESSAGE_TYPE = 'support';
 export const CONVERSATIONS = 'conversations';
 export const MESSAGES = 'messages';
@@ -53,3 +54,9 @@ export const DEFAULT_MAX_CONVERSATION_PER_USER = 5;
 
 export const EVENTS = 'events';
 export const POLLS = 'polls';
+export const INVOICE_GROUP = 'invoice_group';
+export const INVOICES = 'invoices';
+export const COMPANY_ID = 'company_id';
+export const GROUP_ID = 'group_id';
+export const RECEIVER = 'receiver';
+export const STATUS = 'status';

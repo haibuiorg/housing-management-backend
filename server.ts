@@ -5,7 +5,7 @@ import bodyParser from 'body-parser';
 import admin from 'firebase-admin';
 import {inviteTenants} from './src/modules/authentication/code_validation';
 // eslint-disable-next-line max-len
-import {addDocumentToCompany, createHousingCompany, getCompanyDocument, getCompanyDocuments, getCompanyUserRequest, getHousingCompanies, getHousingCompany, joinWithCode, updateCompanyDocument, updateHousingCompanyDetail}
+import {addDocumentToCompany, addNewManager, createHousingCompany, getCompanyDocument, getCompanyDocuments, getCompanyManagerRequest, getCompanyUserRequest, getHousingCompanies, getHousingCompany, joinWithCode, updateCompanyDocument, updateHousingCompanyDetail}
   from './src/modules/housing/manage_housing_company';
 import {registerWithCode, register}
   from './src/modules/authentication/register';
@@ -50,6 +50,11 @@ import {addPollOption, createPoll, editPoll, getPoll, getPolls, removePollOption
 // eslint-disable-next-line max-len
 import {createEvents, editEvent, getEvent, getEvents, removeFromFromEvent, responseToEvent}
   from './src/modules/events/event-service';
+import {createFaultReport}
+  from './src/modules/fault-report/fault-report-service';
+// eslint-disable-next-line max-len
+import {deleteInvoice, generateInvoice, getCompanyInvoiceGroups, getInvoiceDetail, getInvoices}
+  from './src/modules/invoice-generator/invoice_service';
 
 
 dotenv.config();
@@ -102,9 +107,30 @@ router.get('/housing_company/all',
 router.post('/housing_company',
     validateFirebaseIdToken,
     createHousingCompany);
+router.post('/housing_company_manager',
+    validateFirebaseIdToken,
+    addNewManager);
+router.get('/housing_company_manager/:companyId',
+    validateFirebaseIdToken,
+    getCompanyManagerRequest);
 router.put('/housing_company',
     validateFirebaseIdToken,
     updateHousingCompanyDetail);
+router.post('/invoices',
+    validateFirebaseIdToken,
+    generateInvoice);
+router.get('/invoices',
+    validateFirebaseIdToken,
+    getInvoices);
+router.get('/invoice_groups',
+    validateFirebaseIdToken,
+    getCompanyInvoiceGroups);
+router.get('/invoice/:invoiceId',
+    validateFirebaseIdToken,
+    getInvoiceDetail);
+router.delete('/invoice/:invoiceId',
+    validateFirebaseIdToken,
+    deleteInvoice);
 router.get('/apartments', validateFirebaseIdToken, getUserApartmentRequest);
 router.get('/apartment', validateFirebaseIdToken, getSingleApartmentRequest);
 router.put('/apartment', validateFirebaseIdToken, editApartmentRequest);
@@ -207,6 +233,9 @@ router.put('/apartment/document/:document_id',
 // eslint-disable-next-line max-len
 router.get('/housing_company/:housing_company_id/apartment/:apartment_id/document/:document_id',
     validateFirebaseIdToken, getApartmentDocument);
+
+router.post('/housing_company/:companyId/apartment/:apartmentId/fault-report',
+    validateFirebaseIdToken, createFaultReport);
 
 router.get('/polls', validateFirebaseIdToken, getPolls);
 router.get('/poll/:pollId', validateFirebaseIdToken, getPoll);

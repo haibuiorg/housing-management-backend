@@ -15,7 +15,6 @@ export const getPolls =async (request:Request, response: Response) => {
     company_id,
     types,
     include_ended_poll = false,
-    last_created_on = new Date().getTime(),
     limit = 10,
     include_deleted = false,
   } = request.query;
@@ -44,7 +43,7 @@ export const getPolls =async (request:Request, response: Response) => {
         .where('company_id', '==', company_id);
   }
   if (types) {
-    query = query.where('type', 'in', types);
+    query = query.where('type', 'in', [types]);
   }
   if (!include_ended_poll) {
     query = query.where('ended_on', '<=', new Date().getTime());
@@ -61,8 +60,10 @@ export const getPolls =async (request:Request, response: Response) => {
     query = query.limit(parseInt(limit!.toString()));
   }
 
-  if (last_created_on) {
-    query = query.startAfter(last_created_on);
+  if (request.query.last_created_on) {
+    query = query.startAfter(
+        parseInt(request.query.last_created_on?.toString() ?? '0') ??
+        new Date().getTime());
   }
   const result = (await query.get()).docs.map((doc) => doc.data());
   response.status(200).send(result);

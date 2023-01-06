@@ -1,7 +1,7 @@
 import {Request, Response} from 'express';
 import admin, {firestore} from 'firebase-admin';
 // eslint-disable-next-line max-len
-import {APP_COLOR, COMMUNITY_MESSAGE_TYPE, CONVERSATIONS, COUNTRY_CODE, DEFAULT_MAX_CONVERSATION_PER_USER, HOUSING_COMPANIES, LANGUAGE_CODE, MAX_CONVERSATION_PER_USER, MESSAGES, SUPPORT_CHANNELS, SUPPORT_MESSAGE_TYPE}
+import {APP_COLOR, COMMUNITY_MESSAGE_TYPE, CONVERSATIONS, COUNTRY_CODE, DEFAULT_MAX_CONVERSATION_PER_USER, FAULT_REPORT_MESSAGE_TYPE, HOUSING_COMPANIES, LANGUAGE_CODE, MAX_CONVERSATION_PER_USER, MESSAGES, SUPPORT_CHANNELS, SUPPORT_MESSAGE_TYPE}
   from '../../constants';
 import {StorageItem} from '../../dto/storage_item';
 import {Conversation} from '../../dto/conversation';
@@ -26,7 +26,8 @@ export const sendMessage =
       // @ts-ignore
       const senderId = request.user?.uid;
       const mainPath =
-        type === COMMUNITY_MESSAGE_TYPE ? HOUSING_COMPANIES : SUPPORT_CHANNELS;
+        type === COMMUNITY_MESSAGE_TYPE || FAULT_REPORT_MESSAGE_TYPE ?
+         HOUSING_COMPANIES : SUPPORT_CHANNELS;
       const conversation =
         await getConversationDetail(type, channelId, conversationId);
       if (conversation.user_ids?.includes(senderId)!== true) {
@@ -111,7 +112,8 @@ const getConversationDetail =
         conversationId: string,
     ) : Promise<Conversation> => {
       const mainPath =
-        type === COMMUNITY_MESSAGE_TYPE ? HOUSING_COMPANIES : SUPPORT_CHANNELS;
+        type === COMMUNITY_MESSAGE_TYPE || FAULT_REPORT_MESSAGE_TYPE?
+          HOUSING_COMPANIES : SUPPORT_CHANNELS;
       return (await admin.firestore()
           .collection(mainPath).doc(channelId)
           .collection(CONVERSATIONS).doc(conversationId).get())
@@ -171,7 +173,8 @@ export const setConversationSeenRequest =
       }
       // @ts-ignore
       const userId = request.user?.uid;
-      if (type === COMMUNITY_MESSAGE_TYPE) {
+      if (type === COMMUNITY_MESSAGE_TYPE ||
+        type === FAULT_REPORT_MESSAGE_TYPE) {
         if (!await isCompanyTenant(userId, channelId)) {
           response.status(403).send(
               {errors: {message: 'Unauthorized',

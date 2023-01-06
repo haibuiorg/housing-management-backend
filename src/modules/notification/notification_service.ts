@@ -300,6 +300,9 @@ const getUserIdsSubscribeToTopicChannel =
 export const sendTokenNotification = async (
     tokens: string[],
     prefillNotificationPayload?: NotificationPayload) => {
+  if (tokens.length === 0) {
+    return;
+  }
   const content = {
     id: prefillNotificationPayload?.id ?? '',
     channelKey: prefillNotificationPayload?.channel_key ?? DEFAULT,

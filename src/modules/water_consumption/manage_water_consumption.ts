@@ -174,7 +174,8 @@ export const getLatestWaterConsumptionRequest =
         const waterConsumption =
          await getLatestWaterConsumption(
              companyId!.toString());
-        response.status(200).send(waterConsumption);
+        console.log(waterConsumption);
+        response.status(200).send(waterConsumption ?? {});
       } catch (errors) {
         console.log(errors);
         response.status(500).send({errors: errors});
@@ -189,9 +190,11 @@ export const getLatestWaterConsumption = async (companyId: string) => {
       .where(YEAR, '==', year)
       .orderBy(PERIOD, 'desc')
       .limit(1).get()).docs.map((doc) => doc.data())[0];
-  const consumptionValues =
-      await getAllConsumptionValue(companyId, waterConsumption.id);
-  waterConsumption.consumption_values = consumptionValues;
+  if (waterConsumption) {
+    const consumptionValues =
+    await getAllConsumptionValue(companyId, waterConsumption.id);
+    waterConsumption.consumption_values = consumptionValues;
+  }
   return waterConsumption;
 };
 

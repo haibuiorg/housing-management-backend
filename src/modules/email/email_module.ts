@@ -1,4 +1,5 @@
 'use strict';
+import {ResponseError} from '@sendgrid/mail';
 import {Request, Response} from 'express';
 import admin from 'firebase-admin';
 const sgMail = require('@sendgrid/mail');
@@ -19,8 +20,12 @@ export const sendVerificationEmail = async (email: string) => {
         If you didn\'t ask to verify this address, you can ignore this email.
         <br>Thank you and enjoy our app,<br>Your Priorli app team`,
   };
-  sgMail.setApiKey(process.env.SENDGRID);
-  await sgMail.send(msg);
+  try {
+    sgMail.setApiKey(process.env.SENDGRID);
+    await sgMail.send(msg, true);
+  } catch (errors) {
+    console.log((errors as ResponseError).response.body);
+  }
 };
 
 export const sendAnnouncementEmail =
@@ -42,6 +47,7 @@ export const sendAnnouncementEmail =
       });
     }));
 
+    console.log(title);
 
     const msg = {
       to: emails, // Change to your recipient
@@ -59,8 +65,55 @@ export const sendAnnouncementEmail =
       ${body}
      `,
     };
-    sgMail.setApiKey(process.env.SENDGRID);
-    await sgMail.send(msg, true);
+    try {
+      sgMail.setApiKey(process.env.SENDGRID);
+      await sgMail.send(msg, true);
+    } catch (errors) {
+      console.log((errors as ResponseError).response.body);
+    }
+  };
+
+export const sendFaultReportEmail =
+  async (emails: string[],
+      senderEmail: string,
+      displayName: string,
+      title: string,
+      body:string,
+      storageItems: string[]): Promise<void> => {
+    const fileList:
+    { content: string; filename: string; disposition: string; }[] = [];
+    await Promise.all(storageItems.map(async (item: string) => {
+      const [url] = await admin.storage().bucket()
+          .file(item).download();
+      fileList.push({
+        content: url.toString('base64'),
+        filename: item,
+        disposition: 'attachment',
+      });
+    }));
+
+
+    const msg = {
+      to: emails,
+      cc: senderEmail, // Change to your recipient
+      from: {
+        email: 'contact@kierr.co',
+        name: displayName,
+      },
+      attachments: fileList,
+      subject: `${title}`,
+      html: `Hello\,
+      <br>
+      <br>
+      ${body}
+     `,
+    };
+    try {
+      sgMail.setApiKey(process.env.SENDGRID);
+      await sgMail.send(msg, true);
+    } catch (errors) {
+      console.log((errors as ResponseError).response.body);
+    }
   };
 
 export const sendInvitationEmail =
@@ -108,8 +161,12 @@ export const sendInvitationEmail =
         <br>Thank you and enjoy our app,
         <br>Your Priorli app team`,
     };
-    sgMail.setApiKey(process.env.SENDGRID);
-    await sgMail.send(msg, true);
+    try {
+      sgMail.setApiKey(process.env.SENDGRID);
+      await sgMail.send(msg, true);
+    } catch (errors) {
+      console.log((errors as ResponseError).response.body);
+    }
   };
 
 export const sendPasswordResetEmail =
@@ -130,12 +187,40 @@ export const sendPasswordResetEmail =
           <a href="${resetPasswordLink}">Reset password link</a> to continue
           .<br>If you didn\'t ask to reset your password,
            you can ignore this email.<br><br>
-           Thank you and happy recycling!,<br>Your Priorli app team`,
+           Best regards,!,
+           <br>Your Priorli app team`,
       };
       sgMail.setApiKey(process.env.SENDGRID);
       await sgMail.send(msg);
       response.status(200).send({result: 'success'});
     } catch (error) {
+      console.log((error as ResponseError).response.body);
       response.status(500).send({result: 'failed'});
+    }
+  };
+
+export const sendManagerAccountCreatedEmail =
+  async (email: string, companyName: String) => {
+    try {
+      const resetPasswordLink =
+      await admin.auth().generatePasswordResetLink(email);
+      const msg = {
+        to: email, // Change to your recipient
+        from: {
+          email: 'contact@kierr.co',
+          name: 'Priorli App',
+        },
+        subject: 'Welcome to Priorli app',
+        html: `Hello\,
+          <br>You are added as a Manager for ${companyName}
+          <a href="${resetPasswordLink}">Create a password</a> to continue
+          .<br><br><br>
+           Thank you and best regards!,
+           <br>Priorli app team on behalf of ${companyName}`,
+      };
+      sgMail.setApiKey(process.env.SENDGRID);
+      await sgMail.send(msg);
+    } catch (error) {
+      console.log((error as ResponseError).response.body);
     }
   };

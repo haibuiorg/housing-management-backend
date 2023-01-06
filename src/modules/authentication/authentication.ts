@@ -6,6 +6,7 @@ import {ADMIN, APARTMENTS, HOUSING_COMPANIES} from '../../constants';
 import {getCompanyData}
   from '../housing/manage_housing_company';
 import {retrieveUser} from '../user/manage_user';
+import {Company} from '../../dto/company';
 
 export const validateIdTokenAllowAnonymous =
     async (req: Request, res: Response, next: () => void) => {
@@ -80,9 +81,14 @@ export const isAuthorizedAccessToApartment =
     };
 
 export const isCompanyOwner =
-    async (userId:string, housingCompanyId: string) => {
+    async (
+        userId:string,
+        housingCompanyId: string) : Promise<Company | undefined> => {
       const company = await getCompanyData(housingCompanyId);
-      return company?.owners?.includes(userId) || await isAdminRole(userId);
+      if (company?.owners?.includes(userId) || await isAdminRole(userId)) {
+        return company;
+      }
+      return undefined;
     };
 
 export const isCompanyManager =
