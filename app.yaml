@@ -1,6 +1,7 @@
 runtime: nodejs16
 service: default
 env_variables:
+  APP_ENV: "production"
   SERVICE_ACCOUNT_PATH: "../service-account-key.json"
   SENDGRID: "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"
   FIREBASE_WEB_API_KEY: "AIzaSyCXYtcxvEb1dYpLv2q-uDZYQBEnyHqv-zY"

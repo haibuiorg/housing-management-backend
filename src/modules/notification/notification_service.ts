@@ -183,6 +183,17 @@ const subscribeOrUnsubscribeToChannels =
                     firestore.FieldValue.arrayUnion(...subscribedChannels),
                   },
               ));
+          if (unsubscribedChannels.length> 0) {
+            (await admin.firestore()
+                .collection(USERS).doc(userId)
+                .collection(NOTIFICATION_TOKENS).doc(id)
+                .update(
+                    {
+                      channels:
+                    firestore.FieldValue.arrayRemove(unsubscribedChannels),
+                    },
+                ));
+          }
           (await admin.firestore()
               .collection(USERS).doc(userId)
               .collection(NOTIFICATION_TOKENS).doc(id)

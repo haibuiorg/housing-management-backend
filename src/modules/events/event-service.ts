@@ -15,13 +15,13 @@ export const getEvents =async (request:Request, response: Response) => {
     company_id,
     apartment_id,
     types,
-    include_past_event = false,
     last_created_on,
     from = new Date().getTime() - 31556952000,
     to = new Date().getTime() + 31556952000,
-    limit,
     include_deleted = false,
   } = request.query;
+  const limit = (request.query.limit) ?
+  parseInt(request.query.limit.toString()) : 10;
   let query = admin.firestore().collection(EVENTS)
       .where('start_time', '>=', from).where('start_time', '<=', to);
   const isManager =
@@ -75,13 +75,6 @@ export const getEvents =async (request:Request, response: Response) => {
           query.where('type', 'in', processTypes):
           admin.firestore().collection(EVENTS)
               .where('type', 'in', processTypes);
-  }
-
-  if (!include_past_event) {
-    query = query ?
-          query.where('end_time', '<=', new Date().getTime()):
-          admin.firestore().collection(EVENTS)
-              .where('end_time', '<=', new Date().getTime());
   }
   if (!include_deleted) {
     query = query ?

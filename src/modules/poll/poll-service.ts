@@ -15,9 +15,9 @@ export const getPolls =async (request:Request, response: Response) => {
     company_id,
     types,
     include_ended_poll = false,
-    limit = 10,
     include_deleted = false,
   } = request.query;
+  console.log(request.query);
   let query = null;
   if (!company_id) {
     query = admin.firestore().collection(POLLS)
@@ -46,7 +46,9 @@ export const getPolls =async (request:Request, response: Response) => {
     query = query.where('type', 'in', [types]);
   }
   if (!include_ended_poll) {
-    query = query.where('ended_on', '<=', new Date().getTime());
+    query = query.where('ended_on', '>=', new Date().getTime());
+  } else {
+    query = query.orderBy(CREATED_ON, 'desc');
   }
 
   if (!include_deleted) {
@@ -55,10 +57,10 @@ export const getPolls =async (request:Request, response: Response) => {
       admin.firestore().collection(POLLS)
           .where('deleted', '==', false);
   }
-  query = query.orderBy(CREATED_ON, 'desc');
-  if (limit) {
-    query = query.limit(parseInt(limit!.toString()));
-  }
+
+  const limit = (request.query.limit) ?
+    parseInt(request.query.limit.toString()) : 10;
+  query = query.limit(parseInt(limit!.toString()));
 
   if (request.query.last_created_on) {
     query = query.startAfter(

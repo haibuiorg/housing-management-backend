@@ -1,0 +1,22 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+   match /housing_companies/{companyId}/conversations/{documents=**}{
+      allow read, write: if exists(/databases/$(database)/documents/users/$(request.auth.uid)/housing_companies/$(companyId));
+    }
+    match /{path=**}/conversations/{document} {
+      allow read, write: if (request.auth.uid) in resource.data.user_ids;
+    }
+   
+		match /housing_companies/{companyId}/conversations/{document}/messages/{documents=**}{
+      allow read, write: if exists(/databases/$(database)/documents/users/$(request.auth.uid)/housing_companies/$(companyId));
+    }
+    match /support_channels/{channel_id}/conversations/{document}/messages/{documents=**}{
+      allow read, write: 
+      	if (request.auth.uid) in get(/databases/$(database)/documents/support_channels/$(channel_id)/conversations/$(document)).data.user_ids;
+     
+    }
+
+    
+  }
+}

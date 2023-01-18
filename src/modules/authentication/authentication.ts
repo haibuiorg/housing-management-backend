@@ -93,6 +93,9 @@ export const isCompanyOwner =
 
 export const isCompanyManager =
     async (userId:string, housingCompanyId: string) => {
+      if ((housingCompanyId?.length ?? 0) === 0) {
+        return undefined;
+      }
       const company = await getCompanyData(housingCompanyId);
       if (company?.managers?.includes(userId) ||
        company?.owners?.includes(userId) || await isAdminRole(userId)) {
