@@ -1,3 +1,3 @@
 export interface FirebaseObject {
-    [key: string]: any;
+  [key: string]: any;
 }
