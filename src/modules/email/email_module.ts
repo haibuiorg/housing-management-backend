@@ -10,7 +10,7 @@ export const sendVerificationEmail = async (email: string) => {
   const msg = {
     to: email,
     from: {
-      email: "contact@kierr.co",
+      email: "contact@priorli.com",
       name: "Priorli",
     },
     subject: "Verify your email with Priorli",

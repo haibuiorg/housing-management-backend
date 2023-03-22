@@ -146,7 +146,7 @@ export const generateInvoiceList = async (
     "." +
     paymentDate.getFullYear();
   const total = params.items.reduce(
-    (previous, newItem) => previous + newItem.quantity * newItem.unit_cost,
+    (previous, newItem) => previous + newItem.total,
     0
   );
   await admin

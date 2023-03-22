@@ -63,7 +63,8 @@ import {
 import {
   getCountryByCountryCodeRequest,
   getCountryDataRequest,
-  getSupportedContries,
+  getCountryLegalDocumentsRequest,
+  getSupportedContriesRequest,
 } from "./src/modules/country/manage_country";
 // eslint-disable-next-line max-len
 import {
@@ -181,12 +182,17 @@ router.use(
 );
 
 router.post("/code_register", registerWithCode);
-router.get("/countries", getSupportedContries);
+router.get("/countries", getSupportedContriesRequest);
 router.get("/country", validateFirebaseIdToken, getCountryDataRequest);
 router.get(
   "/country/:country_code",
   validateFirebaseIdToken,
   getCountryByCountryCodeRequest
+);
+router.get(
+  "/country/:country_code/legal_documents",
+  validateFirebaseIdToken,
+  getCountryLegalDocumentsRequest
 );
 router.post("/register", register);
 router.post("/reset_password", sendPasswordResetEmail);
@@ -465,6 +471,7 @@ router.post(
 router.post("/checkout/payment_product", validateFirebaseIdToken, purchasePaymentProductItem);
 router.get("/payment_key", validateFirebaseIdToken, getPaymentKey);
 
+//public routes
 router.post("/contact_leads/contact_form", submitContactForm);
 router.post("/contact_leads/offer_form", submitOfferForm);
 

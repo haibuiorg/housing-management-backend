@@ -789,7 +789,7 @@ export const addNewManager = async (request: Request, response: Response) => {
       const firstName = request.body.first_name;
       const lastName = request.body.last_name;
       const phone = request.body.phone;
-      const user = await createUserWithEmail(email, firstName, lastName, phone);
+      const user = await createUserWithEmail(email, companyOwner.currency_code ?? 'fi' ,firstName, lastName, phone);
       addingUserId = user?.user_id;
       if (!user) {
         response.status(500).send({ errors: "unknown" });

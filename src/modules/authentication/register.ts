@@ -9,6 +9,8 @@ import crypto from "crypto";
 import { User } from "../../dto/user";
 import { addPaymentCustomerAccount } from "../payment-externals/payment-service";
 import { Apartment } from "../../dto/apartment";
+import { getSupportedContries, isValidCountryCode } from "../country/manage_country";
+import { getCompanyData } from "../housing/manage_housing_company";
 
 const generatePassword = (
   length = 20,
@@ -47,8 +49,10 @@ export const registerWithCode = async (
       emailVerified: false,
     });
     const paymentCustomer = await addPaymentCustomerAccount(email);
+    const company = await getCompanyData(apartment.housing_company_id!);
     const user = await createUserOnFirestore(
       userRecord.uid,
+      company?.country_code ?? 'fi',
       email,
       [DEFAULT],
       paymentCustomer.id
@@ -66,6 +70,7 @@ export const registerWithCode = async (
 };
 
 export const register = async (request: Request, response: Response) => {
+
   const email = request.body.email;
   if (!isValidEmail(email)) {
     const error = { errors: { code: 500, message: "Invalid email" } };
@@ -80,14 +85,20 @@ export const register = async (request: Request, response: Response) => {
     return;
   }
   try {
+    const firstName = request.body.first_name;
+    const lastName = request.body.last_name;
+    const phone = request.body.phone;
+  
+    let countryCode = request.body.country_code?.toString() ?? "";
+    if (countryCode.length == 0 || !await (isValidCountryCode(countryCode))) {
+      countryCode = "fi";
+    }
+    console.log("Country code: " + countryCode)
     const userRecord = await admin.auth().createUser({
       email: email,
       password: pass,
       emailVerified: false,
     });
-    const firstName = request.body.first_name;
-    const lastName = request.body.last_name;
-    const phone = request.body.phone;
     const paymentCustomer = await addPaymentCustomerAccount(
       email,
       firstName ?? "" + " " + lastName ?? "",
@@ -95,6 +106,7 @@ export const register = async (request: Request, response: Response) => {
     );
     const user = await createUserOnFirestore(
       userRecord.uid,
+      countryCode,
       email,
       [DEFAULT],
       paymentCustomer.id,
@@ -105,6 +117,7 @@ export const register = async (request: Request, response: Response) => {
     response.status(200).send(user);
     sendVerificationEmail(email);
   } catch (errors) {
+    console.log(errors);
     response.status(500).send({ errors: errors });
     return;
   }
@@ -113,9 +126,10 @@ export const register = async (request: Request, response: Response) => {
 
 export const createUserWithEmail = async (
   email: string,
+  countryCode: string,
   firstName?: string,
   lastName?: string,
-  phone?: string
+  phone?: string,
 ): Promise<User | undefined> => {
   if (!isValidEmail(email)) {
     return undefined;
@@ -130,6 +144,7 @@ export const createUserWithEmail = async (
 
     const user = await createUserOnFirestore(
       userRecord.uid,
+      countryCode,
       email,
       [DEFAULT],
       firstName ?? "",
@@ -144,6 +159,7 @@ export const createUserWithEmail = async (
 
 export const createUserOnFirestore = async (
   userUid: string,
+  countryCode: string,
   email: string,
   roles: string[],
   paymentCustomerId: string,
@@ -166,6 +182,7 @@ export const createUserOnFirestore = async (
     roles: roles,
     notification_tokens: [],
     payment_customer_id: paymentCustomerId,
+    country_code: countryCode,
   };
   await admin.firestore().collection(USERS).doc(userUid).set(user);
   return user;

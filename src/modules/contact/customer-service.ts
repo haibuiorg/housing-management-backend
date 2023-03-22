@@ -8,7 +8,7 @@ export const submitContactForm = async (
   request: Request,
   response: Response
 ) => {
-  const { name, email, message, phone = "" } = request.body;
+  const { name, email, message, phone = "", book_demo } = request.body;
   if (
     !name ||
     !email ||
@@ -25,7 +25,7 @@ export const submitContactForm = async (
     return;
   }
   const id = admin.firestore().collection(CONTACT_LEADS).doc().id;
-  const type = "contact_form";
+  const type = book_demo ? "demo_form" : "contact_form";
   const created_on = Date.now();
   const status = CONTACT_LEADS_STATUS_NEW;
   const contactLead = {

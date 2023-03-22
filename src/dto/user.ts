@@ -16,4 +16,5 @@ export interface User extends FirebaseObject {
   avatar_url_expiration?: number;
   addresses?: Address[];
   payment_customer_id: string;
+  country_code: string;
 }

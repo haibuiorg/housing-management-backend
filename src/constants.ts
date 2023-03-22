@@ -73,3 +73,4 @@ export const CONTACT_LEADS_STATUS_REJECTED = "rejected_lead";
 export const LATEST_INVOICE_PAID = "latest_invoice_paid";
 export const CREDITS = "credits";
 export const EMAIL_ADDRESSES = 'email_addresses';
+export const LEGAL_DOCUMENTS = 'legal_documents';

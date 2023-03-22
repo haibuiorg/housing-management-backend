@@ -277,6 +277,54 @@ export const getPreviousWaterConsumptionRequest = async (
   }
 };
 
+export const getPreviousWaterConsumptionAfterAddNew = async (companyId: string) => {
+  let year = new Date().getUTCFullYear();
+  const previousPeriod = await getPreviousConsumptionPeriod(companyId, year);
+  if (previousPeriod < 1) {
+    year = year - 1;
+    const waterConsumption = (
+      await admin
+        .firestore()
+        .collection(HOUSING_COMPANIES)
+        .doc(companyId)
+        .collection(WATER_CONSUMPTION)
+        .where(YEAR, "==", year)
+        .orderBy(PERIOD, "desc")
+        .limit(1)
+        .get()
+    ).docs.map((doc) => doc.data())[0];
+    if (waterConsumption) {
+      const consumptionValues = await getAllConsumptionValue(
+        companyId,
+        waterConsumption.id
+      );
+      waterConsumption.consumption_values = consumptionValues;
+    }
+    return waterConsumption;
+  }
+  console.log("previousPeriod", previousPeriod)
+  const waterConsumption = (
+    await admin
+      .firestore()
+      .collection(HOUSING_COMPANIES)
+      .doc(companyId)
+      .collection(WATER_CONSUMPTION)
+      .where(YEAR, "==", year)
+      .where(PERIOD, "==", previousPeriod - 1)
+      .limit(1)
+      .get()
+  ).docs.map((doc) => doc.data())[0];
+  if (waterConsumption) {
+    const consumptionValues = await getAllConsumptionValue(
+      companyId,
+      waterConsumption.id
+    );
+    waterConsumption.consumption_values = consumptionValues;
+  }
+  return waterConsumption;
+  
+};
+
 export const getPreviousWaterConsumption = async (companyId: string) => {
   let year = new Date().getUTCFullYear();
   const previousPeriod = await getPreviousConsumptionPeriod(companyId, year);
@@ -294,6 +342,13 @@ export const getPreviousWaterConsumption = async (companyId: string) => {
       .limit(1)
       .get()
   ).docs.map((doc) => doc.data())[0];
+  if (waterConsumption) {
+    const consumptionValues = await getAllConsumptionValue(
+      companyId,
+      waterConsumption.id
+    );
+    waterConsumption.consumption_values = consumptionValues;
+  }
   return waterConsumption;
 };
 

@@ -7,4 +7,5 @@ export interface Country extends FirebaseObject {
   vat: number;
   support_languages: string[];
   support_phone_number: string;
+  support_email: string;
 }

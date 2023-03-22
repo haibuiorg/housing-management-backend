@@ -5,7 +5,7 @@ import { WaterConsumption } from "../../dto/water_consumption";
 import { getCompanyData } from "../housing/manage_housing_company";
 import {
   getLatestWaterConsumption,
-  getPreviousWaterConsumption,
+  getPreviousWaterConsumptionAfterAddNew,
 } from "./manage_water_consumption";
 import admin from "firebase-admin";
 import {
@@ -145,9 +145,9 @@ export const generateLatestWaterBill = async (
   consumption: number
 ) => {
   const waterConsumption = await getLatestWaterConsumption(
-    companyId.toString()
+    companyId
   );
-  const previousPeriodConsumption = await getPreviousWaterConsumption(
+  const previousPeriodConsumption = await getPreviousWaterConsumptionAfterAddNew(
     companyId
   );
   try {
@@ -155,7 +155,7 @@ export const generateLatestWaterBill = async (
       userId,
       companyId.toString() ?? "",
       apartmentId?.toString() ?? ""
-    );
+    ) as Apartment;
     if (!apartment) {
       return undefined;
     }
@@ -163,27 +163,26 @@ export const generateLatestWaterBill = async (
     //const id = company?.water_bill_template_id;
     const bankAccounts = await getBankAccounts(companyId.toString() ?? "");
     const previousConsumptionValue =
-      (previousPeriodConsumption as WaterConsumption).consumption_values?.find(
+      ((previousPeriodConsumption as WaterConsumption) ?? waterConsumption).consumption_values?.find(
         (value) => value.apartment_id === apartment.id
       )?.consumption ?? 0;
     const differenceBetweenPeriod = consumption - previousConsumptionValue;
-    const invoiceName = HOUSING_COMPANIES +
-    "/" +
-    companyId +
-    "/" +
-    apartmentId +
-    "/water_bills" +
-    "/" +
-    waterConsumption?.year +
-    "/" +
+    const invoiceName = company?.name +
+    ", Apartment " +
+    apartment.building +
+    apartment.house_code +
+    ": Water bill:" +
     waterConsumption?.period +
-    ".pdf";
+    "/" +
+    waterConsumption?.year;
+    const invoiceValue =
+    ((waterConsumption?.basic_fee ?? 0) / (company?.apartment_count ?? 1) +
+      (waterConsumption?.price_per_cube ?? 0) * differenceBetweenPeriod) *
+    (1 + (company?.vat ?? 0.10));
     const invoice = await updateBillTemplate(
       userId,
       company!,
-      apartment as Apartment,
       waterConsumption as WaterConsumption,
-      previousPeriodConsumption as WaterConsumption,
       //id?.toString() ?? "",
       invoiceName,
       differenceBetweenPeriod,
@@ -211,13 +210,10 @@ export const generateLatestWaterBill = async (
       .doc(apartmentId?.toString())
       .collection(WATER_BILLS);
     const waterBillId = waterBillRef.doc().id;
-    const invoiceValue =
-      ((waterConsumption?.basic_fee ?? 0) / (company?.apartment_count ?? 1) +
-        (waterConsumption?.price_per_cube ?? 0) * differenceBetweenPeriod) *
-      (1 + (company?.vat ?? 0));
+  
     const waterBill = {
       id: waterBillId,
-      url: invoice.storage_link ?? invoiceName,
+      url: invoice.storage_link,
       consumption: differenceBetweenPeriod,
       housing_company_id: companyId,
       apartment_id: apartmentId,
@@ -238,9 +234,7 @@ export const generateLatestWaterBill = async (
 const updateBillTemplate = async (
   userId: string,
   company: Company,
-  apartment: Apartment,
   waterConsumption: WaterConsumption,
-  previousPeriodConsumption: WaterConsumption,
   //templateId: string,
   invoiceName: string,
   differenceBetweenPeriod: number,
@@ -248,30 +242,28 @@ const updateBillTemplate = async (
 ) : Promise<Invoice> => {
   const user = await retrieveUser(userId);
   
-  const waterPrice = waterConsumption.price_per_cube ?? 1 * 
-      (
-        (waterConsumption.consumption_values?.find((value) => value.apartment_id === apartment.id)?.consumption ?? 1) - 
-        (previousPeriodConsumption.consumption_values?.find((value) => value.apartment_id === apartment.id)?.consumption ?? 1)
-      );
-  const basicFee = waterConsumption.basic_fee ?? 1 * (company.apartment_count ?? 1);
+  const waterPrice =
+     differenceBetweenPeriod * (waterConsumption.price_per_cube ?? 1);
+  const basicFee = (waterConsumption.basic_fee ?? 1) / (company.apartment_count ?? 1);
+  
   const invoiceItems : InvoiceItem[] = []
   invoiceItems.push({
     name: "Basic fee",
-    quantity: (company.apartment_count ?? 1),
-    total: basicFee,
+    quantity: (1 / (company.apartment_count ?? 1)),
+    total: basicFee * (1 + (company.vat ?? 0.24)),
     description: "Basic fee",
     unit_cost:  waterConsumption.basic_fee,
-    tax_percentage: 24
+    tax_percentage: (company.vat ?? 0.24) * 100
   });
   invoiceItems.push({
     name: "Water price",
     quantity: differenceBetweenPeriod,
-    total: waterPrice,
+    total: waterPrice * (1 + (company.vat ?? 0.24)),
     description: "Water price",
     unit_cost:  waterConsumption.price_per_cube,
-    tax_percentage: 24
+    tax_percentage: (company.vat ?? 0.24) * 100
   });
-
+  console.log('invoiceItems', invoiceItems);
   const params : GenerateInvoiceParams = {
     userId,
     company,
