@@ -821,8 +821,3 @@ export const addNewManager = async (request: Request, response: Response) => {
     return;
   }
 };
-
-export const resendInviteEmail = async (
-  request: Request,
-  response: Response
-) => {};

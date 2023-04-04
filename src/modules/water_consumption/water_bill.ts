@@ -21,7 +21,6 @@ import { getPublicLinkForFile } from "../storage/manage_storage";
 import { BankAccount } from "../../dto/bank_account";
 import { getBankAccounts } from "../payment/manage_payment";
 import { GenerateInvoiceParams, generateInvoiceList } from "../invoice-generator/invoice_service";
-import { User } from "../../dto/user";
 import { retrieveUser } from "../user/manage_user";
 import { Invoice, InvoiceItem } from "../../dto/invoice";
 
@@ -186,7 +185,8 @@ export const generateLatestWaterBill = async (
       //id?.toString() ?? "",
       invoiceName,
       differenceBetweenPeriod,
-      bankAccounts
+      bankAccounts,
+      apartment
     );
     /*const link = await generatePdf(
       id?.toString() ?? "",
@@ -238,9 +238,26 @@ const updateBillTemplate = async (
   //templateId: string,
   invoiceName: string,
   differenceBetweenPeriod: number,
-  bankAccounts: BankAccount[]
+  bankAccounts: BankAccount[],
+  apartment: Apartment
+
 ) : Promise<Invoice> => {
   const user = await retrieveUser(userId);
+  if (!user.addresses || user.addresses?.length === 0 ) {
+    user.addresses = [
+      {
+        id: "-1",
+        street_address_1: company.address && company.address?.length > 0 ? company.address![0].street_address_1 : apartment.building + ' ' + apartment.house_code,
+        street_address_2: company.address && company.address?.length > 0 ? company.address![0].street_address_2 : apartment.building + ' ' + apartment.house_code,
+        city: company.address && company.address?.length > 0 ? company.address![0].city : "",
+        country: company.address && company.address?.length > 0 ? company.address![0].country : "",
+        postal_code: company.address && company.address?.length > 0 ? company.address![0].postal_code : "",
+        address_type: "billing",
+        owner_id: company.id ?? "",
+        owner_type: "company",
+      }
+    ];
+  }
   
   const waterPrice =
      differenceBetweenPeriod * (waterConsumption.price_per_cube ?? 1);
@@ -262,8 +279,7 @@ const updateBillTemplate = async (
     description: "Water price",
     unit_cost:  waterConsumption.price_per_cube,
     tax_percentage: (company.vat ?? 0.24) * 100
-  });
-  console.log('invoiceItems', invoiceItems);
+  }); 
   const params : GenerateInvoiceParams = {
     userId,
     company,

@@ -184,7 +184,6 @@ export const addCompanySubscription = async (
   const subscription: Subscription = {
     id: subscriptionId,
     is_active: true,
-    used_active_users: 0,
     payment_service_subscription_id: paymentServiceSubscriptionId,
     subscription_plan_id: subscriptionPlanId,
     created_by: userId,

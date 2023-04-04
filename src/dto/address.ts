@@ -7,4 +7,7 @@ export interface Address extends FirebaseObject {
   city?: string;
   country_code?: string;
   id: string;
+  owner_type: 'user' | 'company';
+  owner_id: string;
+  address_type: 'billing' | 'shipping';
 }

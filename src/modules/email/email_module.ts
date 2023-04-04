@@ -2,6 +2,8 @@
 import { ResponseError } from "@sendgrid/mail";
 import { Request, Response } from "express";
 import admin from "firebase-admin";
+import { PRIORLI_PUBLIC_LOGO_URL } from "../../constants";
+import { PRIORLI_INVITATION_EMAIL_SCREENSHOT_LINKS, invitationEmail } from "./email_template";
 const sgMail = require("@sendgrid/mail");
 const axios = require("axios").default;
 
@@ -49,17 +51,15 @@ export const sendEmail = async (
     })
   );
 
-  console.log(title);
-
   const msg = {
-    to: emails, // Change to your recipient
+    to: emails,
     from: {
       email: "contact@priorli.com",
       name: displayName,
     },
     attachments: fileList,
     subject: `${title}`,
-    html: `Hello\,
+    html: `Hei,
       <br>
       <br>
       ${subtitle}
@@ -155,15 +155,7 @@ export const sendInvitationEmail = async (
       name: "Priorli",
     },
     subject: "Create account with Priorli",
-    html: `Hello\,
-        <br>
-        <br> To create user and get access to ${companyName} housing company.
-        <br>Click on this link: ${links.shortLink}
-        <br>Or copy this code to register
-        <h4><b>${code}</b></h4>
-        <br>
-        <br>Thank you and enjoy,
-        <br>Your Priorli team`,
+    html: invitationEmail('fi', links.shortLink, code, companyName, PRIORLI_PUBLIC_LOGO_URL,undefined,PRIORLI_INVITATION_EMAIL_SCREENSHOT_LINKS)
   };
   try {
     sgMail.setApiKey(process.env.SENDGRID);
@@ -234,3 +226,5 @@ export const sendManagerAccountCreatedEmail = async (
     console.log((error as ResponseError).response.body);
   }
 };
+
+

@@ -23,17 +23,17 @@ export const generateInvoicePdf = async (
   invoice: Invoice,
   company: Company,
   bankAccount: BankAccount,
-  client: User,
+  receiverName: string,
   googleCloudStorageUpload: Writable,
-  clientAddress: Address
+  receiverAddress: Address,
 ) => {
   const doc = new PDFDocument({
     size: "A4",
-    margin: 32,
+    margin: 24,
   });
 
   await generateHeader(doc, company);
-  generateCustomerInformation(doc, invoice, client, clientAddress);
+  generateCustomerInformation(doc, invoice, receiverName, receiverAddress);
   generateInvoiceTable(doc, invoice);
   generateFooter(doc, bankAccount, invoice);
   doc.end();
@@ -68,7 +68,7 @@ const generateHeader = async (doc: PDFKit.PDFDocument, company: Company) => {
 const generateCustomerInformation = (
   doc: PDFKit.PDFDocument,
   invoice: Invoice,
-  client: User,
+  receiverName: string,
   address: Address
 ) => {
   doc.fillColor("#444444").fontSize(20).text("Invoice", 50, 160);
@@ -93,7 +93,7 @@ const generateCustomerInformation = (
     )
 
     .font("Helvetica-Bold")
-    .text(client.name ?? "Receiver", 300, customerInformationTop)
+    .text(receiverName ?? "Receiver", 300, customerInformationTop)
     .font("Helvetica")
     .text(
       (address?.street_address_1 ?? "") + ", " + (address?.street_address_2 ?? ""),

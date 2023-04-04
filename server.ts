@@ -3,7 +3,7 @@ require("dotenv").config();
 import express from "express";
 import bodyParser from "body-parser";
 import admin from "firebase-admin";
-import { inviteTenants } from "./src/modules/authentication/code_validation";
+import { getInvitationRequest, inviteTenants, resendPendingInvitationRequest } from "./src/modules/authentication/code_validation";
 // eslint-disable-next-line max-len
 import {
   addDocumentToCompany,
@@ -126,6 +126,7 @@ import {
   getCompanyInvoiceGroups,
   getInvoiceDetail,
   getInvoices,
+  sendInvoiceManually,
 } from "./src/modules/invoice-generator/invoice_service";
 import {
   cancelSubscriptionRequest,
@@ -238,8 +239,14 @@ router.get("/apartments", validateFirebaseIdToken, getUserApartmentRequest);
 router.get("/apartment", validateFirebaseIdToken, getSingleApartmentRequest);
 router.put("/apartment", validateFirebaseIdToken, editApartmentRequest);
 router.post("/apartments", validateFirebaseIdToken, addApartmentRequest);
-router.post("/apartments/invite", validateFirebaseIdToken, inviteTenants);
+router.post("/invoice/:invoiceId", validateFirebaseIdToken, sendInvoiceManually);
+
 router.post("/apartment/join_with_code", validateFirebaseIdToken, joinWithCode);
+
+
+router.post("/invitations", validateFirebaseIdToken, inviteTenants);
+router.get("/invitations", validateFirebaseIdToken, getInvitationRequest);
+router.post("/invitations/resend", validateFirebaseIdToken, resendPendingInvitationRequest);
 
 router.post("/water_price", validateFirebaseIdToken, addNewWaterPrice);
 router.delete("/water_price", validateFirebaseIdToken, deleteWaterPrice);

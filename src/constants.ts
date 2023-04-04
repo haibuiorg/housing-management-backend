@@ -72,5 +72,6 @@ export const CONTACT_LEADS_STATUS_ACCEPTED = "accepted_lead";
 export const CONTACT_LEADS_STATUS_REJECTED = "rejected_lead";
 export const LATEST_INVOICE_PAID = "latest_invoice_paid";
 export const CREDITS = "credits";
-export const EMAIL_ADDRESSES = 'email_addresses';
 export const LEGAL_DOCUMENTS = 'legal_documents';
+
+export const PRIORLI_PUBLIC_LOGO_URL = 'https://firebasestorage.googleapis.com/v0/b/priorli.appspot.com/o/public%2Flogo%2F3.png?alt=media&token=d0a036b2-5eff-4691-b752-21de74b9ce11'

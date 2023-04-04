@@ -197,7 +197,9 @@ export const generateInvoiceList = async (
         virtual_barcode: virtualBarcode,
         payment_date: params.paymentDateInMs,
         storage_link: fileName,
+        additional_invoice_links : [],
         status: "pending",
+        bank_account_id: params.bankAccount.id ?? '',
       };
       await admin
         .firestore()
@@ -220,39 +222,32 @@ export const generateInvoiceList = async (
           },
         })
         .addListener("finish", async () => {
-          if (params.shouldSendEmail) {
-            const acitveSubscription = await hasOneActiveSubscription(
-              params.company.id ?? ''
-            );
-            if (!acitveSubscription || acitveSubscription.is_active !== true) {
-              return;
-            }
-            const subscriptionPlan = await getSubscriptionPlanById(
-              acitveSubscription.subscription_plan_id
-            );
-            if (subscriptionPlan.notification_types.includes("email")) {
-              await sendEmail(
-                [receiver.email],
-                await getUserDisplayName(params.userId, params.company.id ?? ''),
-                "New invoice: " + invoice.invoice_name,
-                "New invoice arrive",
-                "Hello New invoice arrived. Total: " +
-                  invoice.subtotal +
-                  ". Due date: " +
-                  new Date(invoice.payment_date),
-                [fileName]
-              );
-            }
+          if (!params.shouldSendEmail) {
+            return
           }
+          const senderName = await getUserDisplayName(params.userId, params.company.id ?? '');
+          await sendInvoiceEmail(senderName, invoice, [receiver.email], [fileName]);
+          
+        }).addListener('error', (e) => {
+          console.error(e);
         });
       const address: Address = receiver.addresses
         ? receiver.addresses[0]
-        : { id: "" };
+        : { 
+          id: "", 
+          city: params.company.city ?? "", 
+          country_code: params.company.country_code ?? "", 
+          postal_code: params.company.postal_code ?? "", 
+          street_address_1: params.company.street_address_1 ?? "", 
+          street_address_2: params.company.street_address_2 ?? "", 
+          owner_type: "company", 
+          owner_id: params.company.id ?? "", 
+          address_type: "billing"};
       await generateInvoicePdf(
         invoice,
         params.company,
         params.bankAccount,
-        receiver,
+        receiver.first_name + " " + receiver.last_name,
         gs,
         address
       );
@@ -267,6 +262,120 @@ export const generateInvoiceList = async (
     })
   );
   return invoiceList;
+}
+
+const sendInvoiceEmail = async (senderName: string,invoice: Invoice, emails: string[], invoiceLinks: string[]) : Promise<Invoice | undefined> => {
+  const acitveSubscription = await hasOneActiveSubscription(
+    invoice.company_id
+  );
+  if (!acitveSubscription || acitveSubscription.is_active !== true) {
+    return;
+  }
+  const subscriptionPlan = await getSubscriptionPlanById(
+    acitveSubscription.subscription_plan_id
+  );
+  if (subscriptionPlan.notification_types.includes("email")) {
+    try {
+      await sendEmail(
+        emails,
+        senderName,
+        "New invoice: " + invoice.invoice_name,
+        "",
+        "Hello New invoice arrived. Total: " +
+          invoice.subtotal +
+          ". Due date: " +
+          new Date(invoice.payment_date),
+        invoiceLinks
+      );
+      return invoice;
+    }
+    catch (e) { 
+      console.log(e)
+    }
+  }
+}
+
+export const sendInvoiceManually = async (request: Request, response: Response) => {
+  // @ts-ignore
+  const userId = request.user.uid;
+  const invoiceId = request.params.invoiceId;
+
+  const invoice = await getInvoiceById(invoiceId);
+  if (!invoice) {
+    return response.status(400).send("Invoice not found");
+  }
+
+  const company = await isCompanyManager(userId, invoice.company_id);
+  if (!company) {
+    return response.status(403).send("Forbidden");
+  }
+  
+  const newReceiverName = request.body.new_receiver_name ?? '';
+  const senderName = await getUserDisplayName(userId, invoice.company_id);
+  const emails = request.body.emails;
+  if (newReceiverName.length > 0) {
+    const companyBankAccounts = await getBankAccounts(invoice.company_id, false);
+    if (!companyBankAccounts || companyBankAccounts.length === 0) {
+      response.status(500).send({ errors: { error: "No bank account added" } });
+      return;
+    }
+    
+    const bankAccount =
+      companyBankAccounts.filter((item) => item.id === invoice.bank_account_id)[0] ??
+      companyBankAccounts[0];
+    const newStorageLink = (invoice?.storage_link ?? '').replaceAll('.pdf', `_${Date.now()}.pdf`);
+    const gs = admin
+    .storage()
+    .bucket()
+    .file(newStorageLink)
+    .createWriteStream({
+      resumable: false,
+      validation: false,
+      contentType: "auto",
+      metadata: {
+        "Cache-Control": "public, max-age=31536000",
+      },
+    })
+    .addListener("finish", async () => {
+      const additionalInvoice = invoice.additional_invoice_links ?? [];
+      additionalInvoice.push(newStorageLink);
+      await admin.firestore()
+        .collection(HOUSING_COMPANIES).doc(invoice.company_id)
+        .collection(INVOICES).doc(invoice.id)
+        .update({additional_invoice_links: additionalInvoice});
+      invoice.additional_invoice_links = additionalInvoice;
+      await sendInvoiceEmail(senderName, invoice, emails, [newStorageLink]);
+      
+    }).addListener('error', (e) => {
+      response.status(500).send({ errors: { error: e } });
+    });
+    const address: Address = { 
+      id: "", 
+      street_address_1: request.body.street_address_1 ?? company.street_address_1 ?? "",
+      street_address_2: request.body.street_address_2 ?? company.street_address_2 ?? "",
+      city: request.body.city ?? company.city ?? "", 
+      country_code:  request.body.country_code ?? company.country_code ?? "",
+      postal_code: request.body.postal_code ?? company.postal_code ?? "",
+      owner_type: "company", 
+      owner_id: company.id ?? "",
+      address_type: "billing"
+    };
+    await generateInvoicePdf(
+      invoice,
+      company,
+      bankAccount,
+      newReceiverName,
+      gs,
+      address
+    );
+    return response.status(200).send(invoice);
+  }
+  const invoiceResult = await sendInvoiceEmail(senderName, invoice, emails, invoice.storage_link ? [invoice.storage_link] : []);
+  if (invoice) {
+    return response.status(200).send(invoiceResult);
+  }
+  return response.status(400).send("Invoice not found");
+
 }
 
 
@@ -294,7 +403,7 @@ export const getInvoices = async (request: Request, response: Response) => {
   if (groupId) {
     query = query.where(GROUP_ID, "==", groupId);
   }
-  if (onlyPersonal) {
+  if (onlyPersonal == true) {
     query = query.where(RECEIVER, "==", userId);
   } else {
     if (!(await isCompanyManager(userId, companyId?.toString() ?? ""))) {
@@ -368,33 +477,7 @@ export const getInvoiceDetail = async (
   const userId = request.user.uid;
   const invoiceId = request.params.invoiceId;
   try {
-    const invoice = (
-      await admin
-        .firestore()
-        .collectionGroup(INVOICES)
-        .where("id", "==", invoiceId)
-        .limit(1)
-        .get()
-    ).docs.map((doc) => doc.data())[0] as Invoice;
-    const now = new Date().getTime();
-
-    if ((invoice.invoice_url_expiration ?? now) <= now) {
-      const expiration = now + 604000;
-      const invoiceUrl = await getPublicLinkForFile(
-        invoice.storage_link ?? "",
-        expiration
-      );
-      await admin
-        .firestore()
-        .collection(HOUSING_COMPANIES)
-        .doc(invoice.company_id)
-        .collection(INVOICES)
-        .doc(invoiceId)
-        .update({
-          invoice_url: invoiceUrl,
-          invoice_url_expiration: expiration,
-        });
-    }
+    const invoice = await getInvoiceById(invoiceId);
     if (
       !invoice ||
       invoice.receiver != userId ||
@@ -409,6 +492,37 @@ export const getInvoiceDetail = async (
     response.status(500).send(errors);
   }
 };
+
+const getInvoiceById = async (invoiceId: string) => {
+  const invoice = (
+    await admin
+      .firestore()
+      .collectionGroup(INVOICES)
+      .where("id", "==", invoiceId)
+      .limit(1)
+      .get()
+  ).docs.map((doc) => doc.data())[0] as Invoice;
+  const now = new Date().getTime();
+
+  if ((invoice.invoice_url_expiration ?? now) <= now) {
+    const expiration = now + 604000;
+    const invoiceUrl = await getPublicLinkForFile(
+      invoice.storage_link ?? "",
+      expiration
+    );
+    await admin
+      .firestore()
+      .collection(HOUSING_COMPANIES)
+      .doc(invoice.company_id)
+      .collection(INVOICES)
+      .doc(invoiceId)
+      .update({
+        invoice_url: invoiceUrl,
+        invoice_url_expiration: expiration,
+      });
+  }
+  return invoice;
+}
 
 export const deleteInvoice = async (request: Request, response: Response) => {
   // @ts-ignore

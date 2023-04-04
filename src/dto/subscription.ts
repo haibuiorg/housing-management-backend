@@ -8,7 +8,6 @@ export interface Subscription extends FirebaseObject {
   created_by: string;
   company_id: string;
   quantity?: number;
-  used_active_users: number;
   is_active: boolean;
   payment_service_subscription_id?: string;
   latest_invoice_paid: boolean;

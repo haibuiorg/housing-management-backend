@@ -19,6 +19,8 @@ export interface Invoice extends FirebaseObject {
   company_id: string;
   status: "paid" | "pending";
   currency_code: string;
+  additional_invoice_links: string[];
+  bank_account_id: string;
 }
 
 export interface InvoiceGroup extends FirebaseObject {
