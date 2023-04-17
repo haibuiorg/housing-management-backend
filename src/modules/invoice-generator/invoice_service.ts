@@ -16,7 +16,9 @@ import {
   HOUSING_COMPANIES,
   INVOICES,
   INVOICE_GROUP,
+  IS_ACTIVE,
   IS_DELETED,
+  PAYMENT_PRODUCT_ITEMS,
   RECEIVER,
   STATUS,
 } from "../../constants";
@@ -35,6 +37,8 @@ import { deductCredit, getTotalCredit } from "../credit/credit-service";
 import { BankAccount } from "../../dto/bank_account";
 import { Company } from "../../dto/company";
 import { User } from "../../dto/user";
+import { PaymentProductItem } from "../../dto/payment-product-item";
+import { createInvoiceForCompanyCustomer } from "../payment-externals/payment-service";
 const finnishBankUtils = require("finnish-bank-utils");
 
 export const generateInvoice = async (request: Request, response: Response) => {
@@ -43,8 +47,12 @@ export const generateInvoice = async (request: Request, response: Response) => {
   const companyId = request.body.company_id;
   const receiverIds = request.body.receiver_ids;
   const invoiceName = request.body.invoice_name;
-  const items = request.body.items as InvoiceItem[];
+  const items = request.body.items as {
+    payment_product_id: string;
+    quantity: number;
+  }[];
   const sendEmail = request.body.send_email ?? false;
+  const issueExternalInvoice = request.body.issue_external_invoice ?? false;
   const currentDate = new Date().getTime();
   const paymentDateInMs = request.body.payment_date ?? currentDate + 1209600000;
   const bankAccountId = request.body.bank_account_id;
@@ -92,16 +100,18 @@ export const generateInvoice = async (request: Request, response: Response) => {
   const bankAccount =
     companyBankAccounts.filter((item) => item.id === bankAccountId)[0] ??
     companyBankAccounts[0];
-  const reveiverDetail = await retrieveUsers(receiverIds);
+  const receiverDetail = await retrieveUsers(receiverIds);
   const params: GenerateInvoiceParams = {
     userId,
     company,
     invoiceName,
-    reveiverDetail,
+    receiverDetail,
     bankAccount,
     paymentDateInMs,
     shouldSendEmail: sendEmail,
+    issueExternalInvoice,
     items,
+    additionalInvoiceCost: subscriptionPlan.additional_invoice_cost,
   }
   const invoiceList = await generateInvoiceList(params);
   await deductCredit(companyId, subscriptionPlan.additional_invoice_cost);
@@ -112,11 +122,16 @@ export interface GenerateInvoiceParams {
   userId: string,
   company: Company,
   invoiceName: string,
-  reveiverDetail: User[],
+  receiverDetail: User[],
   bankAccount: BankAccount,
   paymentDateInMs: number,
   shouldSendEmail: boolean,
-  items: InvoiceItem[],
+  issueExternalInvoice: boolean,
+  items: {
+    payment_product_id: string,
+    quantity: number,
+  }[],
+  additionalInvoiceCost: number
 }
 
 export const generateInvoiceList = async (
@@ -136,7 +151,7 @@ export const generateInvoiceList = async (
     created_on: Date.now(),
     company_id: params.company.id ?? '',
     payment_date: params.paymentDateInMs,
-    number_of_invoices: params.reveiverDetail.length,
+    number_of_invoices: params.receiverDetail.length,
   };
   const paymentDate = new Date(params.paymentDateInMs);
   const formatDate =
@@ -145,8 +160,13 @@ export const generateInvoiceList = async (
     (paymentDate.getMonth() + 1) +
     "." +
     paymentDate.getFullYear();
-  const total = params.items.reduce(
-    (previous, newItem) => previous + newItem.total,
+  const paymentProductItems = (await admin.firestore().collection(PAYMENT_PRODUCT_ITEMS)
+    .where(COMPANY_ID, '==', params.company.id)
+    .where("id", "in", params.items.map((item) => item.payment_product_id))
+    .where(IS_ACTIVE, '==', true)
+    .get()).docs.map((doc) => doc.data() as PaymentProductItem);
+  const total = paymentProductItems.reduce(
+    (previous, newItem) => previous + newItem.amount,
     0
   );
   await admin
@@ -157,7 +177,7 @@ export const generateInvoiceList = async (
     .doc(groupId)
     .set(invoiceGroup);
   await Promise.all(
-    params.reveiverDetail.map(async (receiver) => {
+    params.receiverDetail.map(async (receiver) => {
       const id = admin
         .firestore()
         .collection(HOUSING_COMPANIES)
@@ -189,10 +209,18 @@ export const generateInvoiceList = async (
         reference_number: ref,
         invoice_name: params.invoiceName ?? "Invoice",
         subtotal: total,
+        updated_on: Date.now(),
         paid: 0,
         is_deleted: false,
         receiver: receiver.user_id,
-        items: params.items,
+        items: params.items.map((item) => {
+          const paymentProductItem = paymentProductItems.filter((paymentProductItem) => paymentProductItem.id === item.payment_product_id)[0];
+          return {
+            payment_product_item: paymentProductItem,
+            quantity: item.quantity,
+        
+          };
+        }),
         company_id: params.company.id ?? '',
         virtual_barcode: virtualBarcode,
         payment_date: params.paymentDateInMs,
@@ -209,7 +237,23 @@ export const generateInvoiceList = async (
         .doc(id)
         .set(invoice);
       invoiceList.push(invoice);
-      const gs = admin
+      const address: Address = receiver.addresses
+        ? receiver.addresses[0]
+        : { 
+          id: "", 
+          city: params.company.city ?? "", 
+          country_code: params.company.country_code ?? "", 
+          postal_code: params.company.postal_code ?? "", 
+          street_address_1: params.company.street_address_1 ?? "", 
+          street_address_2: params.company.street_address_2 ?? "", 
+          owner_type: "company", 
+          owner_id: params.company.id ?? "", 
+          address_type: "billing"};
+      if (params.issueExternalInvoice) { 
+        const externalInvoice = await createInvoiceForCompanyCustomer(params.company, receiver, 0 , invoice);
+        console.log(externalInvoice);
+      } else {
+        const gs = admin
         .storage()
         .bucket()
         .file(fileName)
@@ -226,23 +270,11 @@ export const generateInvoiceList = async (
             return
           }
           const senderName = await getUserDisplayName(params.userId, params.company.id ?? '');
-          await sendInvoiceEmail(senderName, invoice, [receiver.email], [fileName]);
+          await sendInvoiceEmail(senderName, invoice, params.company.name ?? '' ,[receiver.email], [fileName]);
           
         }).addListener('error', (e) => {
           console.error(e);
         });
-      const address: Address = receiver.addresses
-        ? receiver.addresses[0]
-        : { 
-          id: "", 
-          city: params.company.city ?? "", 
-          country_code: params.company.country_code ?? "", 
-          postal_code: params.company.postal_code ?? "", 
-          street_address_1: params.company.street_address_1 ?? "", 
-          street_address_2: params.company.street_address_2 ?? "", 
-          owner_type: "company", 
-          owner_id: params.company.id ?? "", 
-          address_type: "billing"};
       await generateInvoicePdf(
         invoice,
         params.company,
@@ -251,6 +283,8 @@ export const generateInvoiceList = async (
         gs,
         address
       );
+      }
+      
       await sendNotificationToUsers([receiver.user_id], {
         title: "New invoice: " + invoice.invoice_name,
         body:
@@ -264,7 +298,7 @@ export const generateInvoiceList = async (
   return invoiceList;
 }
 
-const sendInvoiceEmail = async (senderName: string,invoice: Invoice, emails: string[], invoiceLinks: string[]) : Promise<Invoice | undefined> => {
+const sendInvoiceEmail = async (senderName: string,invoice: Invoice, companyName: String, emails: string[], invoiceLinks: string[]) : Promise<Invoice | undefined> => {
   const acitveSubscription = await hasOneActiveSubscription(
     invoice.company_id
   );
@@ -280,10 +314,12 @@ const sendInvoiceEmail = async (senderName: string,invoice: Invoice, emails: str
         emails,
         senderName,
         "New invoice: " + invoice.invoice_name,
-        "",
-        "Hello New invoice arrived. Total: " +
+        '',
+        `New invoice ${companyName?.length > 0 ? 'from ' + companyName : ''} arrived.</br>
+        </br>Total: ` +
           invoice.subtotal +
-          ". Due date: " +
+          `.</br>
+          </br>Due date: ` +
           new Date(invoice.payment_date),
         invoiceLinks
       );
@@ -344,7 +380,7 @@ export const sendInvoiceManually = async (request: Request, response: Response) 
         .collection(INVOICES).doc(invoice.id)
         .update({additional_invoice_links: additionalInvoice});
       invoice.additional_invoice_links = additionalInvoice;
-      await sendInvoiceEmail(senderName, invoice, emails, [newStorageLink]);
+      await sendInvoiceEmail(senderName, invoice, company.name ?? '' , emails, [newStorageLink]);
       
     }).addListener('error', (e) => {
       response.status(500).send({ errors: { error: e } });
@@ -370,7 +406,7 @@ export const sendInvoiceManually = async (request: Request, response: Response) 
     );
     return response.status(200).send(invoice);
   }
-  const invoiceResult = await sendInvoiceEmail(senderName, invoice, emails, invoice.storage_link ? [invoice.storage_link] : []);
+  const invoiceResult = await sendInvoiceEmail(senderName, invoice, company.name ?? '' , emails, invoice.storage_link ? [invoice.storage_link] : []);
   if (invoice) {
     return response.status(200).send(invoiceResult);
   }
@@ -504,7 +540,7 @@ const getInvoiceById = async (invoiceId: string) => {
   ).docs.map((doc) => doc.data())[0] as Invoice;
   const now = new Date().getTime();
 
-  if ((invoice.invoice_url_expiration ?? now) <= now) {
+  if ((invoice.invoice_url_expiration ?? now) <= now && (invoice.invoice_url_expiration ?? now) > 0) {
     const expiration = now + 604000;
     const invoiceUrl = await getPublicLinkForFile(
       invoice.storage_link ?? "",
@@ -538,7 +574,7 @@ export const deleteInvoice = async (request: Request, response: Response) => {
         .get()
     ).docs.map((doc) => doc.data())[0] as Invoice;
     const now = new Date().getTime();
-    if ((invoice.invoice_url_expiration ?? now) <= now) {
+    if ((invoice.invoice_url_expiration ?? now) <= now && (invoice.invoice_url_expiration ?? now) > 0) {
       const expiration = now + 604000;
       const invoiceUrl = await getPublicLinkForFile(
         invoice.storage_link ?? "",
@@ -581,6 +617,22 @@ export const deleteInvoice = async (request: Request, response: Response) => {
     response.status(500).send(errors);
   }
 };
+
+export const updateInvoiceStatus = async (companyId: string, invoiceId: string, status: "paid"| "pending", invoiceUrl: string) => {
+  const data = {
+    invoice_url: invoiceUrl,
+    invoice_url_expiration: -1,
+    status: status, 
+    updated_on: Date.now()
+  }
+  await admin
+    .firestore()
+    .collection(HOUSING_COMPANIES)
+    .doc(companyId)
+    .collection(INVOICES)
+    .doc(invoiceId)
+    .update(data);
+}
 
 export const getThisCycleCompanyInvoiceCount = async (
   companyId: string

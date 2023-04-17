@@ -170,10 +170,13 @@ export const getUserDisplayName = async (userId: string, companyId: string) => {
   return displayName;
 };
 
-export const retrieveUser = async (userId: string): Promise<User> => {
+export const retrieveUser = async (userId: string): Promise<User|undefined> => {
   const user = (
     await admin.firestore().collection(USERS).doc(userId).get()
   ).data() as User;
+  if (!user) { 
+    return undefined;
+  }
   if (
     (user.avatar_url_expiration ?? Date.now()) <= Date.now() &&
     (user.avatar_storage_location?.length ?? 0) > 0

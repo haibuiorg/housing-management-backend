@@ -6,16 +6,20 @@ import admin from "firebase-admin";
 import { getInvitationRequest, inviteTenants, resendPendingInvitationRequest } from "./src/modules/authentication/code_validation";
 // eslint-disable-next-line max-len
 import {
+  addCompanyPaymentProductItemRequest,
   addDocumentToCompany,
   addNewManager,
   createHousingCompany,
+  deletePaymentProductItemRequest,
   getCompanyDocument,
   getCompanyDocuments,
   getCompanyManagerRequest,
+  getCompanyPaymentProductItemRequest,
   getCompanyUserRequest,
   getHousingCompanies,
   getHousingCompany,
   joinWithCode,
+  setUpPaymentAccountRequest,
   updateCompanyDocument,
   updateHousingCompanyDetail,
 } from "./src/modules/housing/manage_housing_company";
@@ -138,7 +142,7 @@ import {
   purchasePaymentProductItem,
   subscriptionStatusCheck,
 } from "./src/modules/subscription/subscription-service";
-import { webhookEvents } from "./src/modules/payment-externals/payment-service";
+import { connectAccountWebhookEvents, webhookEvents } from "./src/modules/payment-externals/payment-service";
 import {
   submitContactForm,
   submitOfferForm,
@@ -173,6 +177,11 @@ router.post(
   "/payment/webhooks",
   express.raw({ type: "application/json" }),
   webhookEvents
+);
+router.post(
+  "/payment/account/webhooks",
+  express.raw({ type: "application/json" }),
+  connectAccountWebhookEvents
 );
 
 router.use(jsonParser);
@@ -310,7 +319,11 @@ router.delete(
   validateFirebaseIdToken,
   deleteCompanyBankAccountRequest
 );
-
+router.post(
+  "/bank_accounts/setup_payment_connect_account",
+  validateFirebaseIdToken,
+  setUpPaymentAccountRequest
+);
 router.get("/announcement", validateFirebaseIdToken, getAnnouncements);
 router.get(
   "/announcement/:announcement_id",
@@ -376,6 +389,21 @@ router.post(
   "/housing_company/documents",
   validateFirebaseIdToken,
   addDocumentToCompany
+);
+router.post(
+  "/housing_company/invoice/payment_product_item",
+  validateFirebaseIdToken,
+  addCompanyPaymentProductItemRequest
+)
+router.get(
+  "/housing_company/invoice/payment_product_items",
+  validateFirebaseIdToken,
+  getCompanyPaymentProductItemRequest
+);
+router.delete(
+  "/housing_company/invoice/payment_product_items",
+  validateFirebaseIdToken,
+  deletePaymentProductItemRequest
 );
 router.get(
   "/housing_company/:companyId/users",
@@ -475,6 +503,7 @@ router.post(
   validateFirebaseIdToken,
   createPaymentLinkSubscription
 );
+
 router.post("/checkout/payment_product", validateFirebaseIdToken, purchasePaymentProductItem);
 router.get("/payment_key", validateFirebaseIdToken, getPaymentKey);
 

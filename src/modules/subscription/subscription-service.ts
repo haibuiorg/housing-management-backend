@@ -279,6 +279,10 @@ export const createPaymentLinkSubscription = async (
   ).docs.map((doc) => doc.data()) as Subscription[];
   const subscriptionPlan = await getSubscriptionPlanById(subscription_plan_id);
   const user = await retrieveUser(userId);
+  if (!user) {
+    response.sendStatus(403);
+    return;
+  }
   if (hasExistingSuscription.length > 0) {
     const paymentLink = await addMoreAccountToSubscription(
       hasExistingSuscription[0].payment_service_subscription_id!,
@@ -481,6 +485,7 @@ export const getAvailablePaymentProductItems = async (
       .collection(PAYMENT_PRODUCT_ITEMS)
       .where("is_active", "==", true)
       .where("country_code", "==", country_code)
+      .where("company_id", "==", null)
       .get()
   ).docs.map((doc) => doc.data());
   response.send(productItems);

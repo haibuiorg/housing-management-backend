@@ -16,6 +16,7 @@ import {
   HOUSING_COMPANIES,
   HOUSING_COMPANY_ID,
   IS_DELETED,
+  PAYMENT_PRODUCT_ITEMS,
   USERS,
 } from "../../constants";
 import { Company } from "../../dto/company";
@@ -37,6 +38,8 @@ import { User } from "../../dto/user";
 import { isValidEmail } from "../../strings_utils";
 import { createUserWithEmail } from "../authentication/register";
 import { sendManagerAccountCreatedEmail } from "../email/email_module";
+import { addStripeProductForConnectAccount, createConnectAccount, createConnectAccountLink, retrieveConnectAccount } from "../payment-externals/payment-service";
+import { PaymentProductItem } from "../../dto/payment-product-item";
 
 export const createHousingCompany = async (
   request: Request,
@@ -58,51 +61,89 @@ export const createHousingCompany = async (
     .collection(HOUSING_COMPANIES)
     .doc().id;
   const countryCode = request.body.country_code;
-  const companyCountry = await getCountryData(countryCode?.toString() ?? "fi");
-  // @ts-ignore
-  const userId = request.user?.uid;
-  const housingCompany: Company = {
-    id: housingCompanyId,
-    name: housingCompanyName,
-    owners: [userId],
-    managers: [userId],
-    credit_amount: 0,
-    created_on: new Date().getTime(),
-    apartment_count: 0,
-    is_deleted: false,
-    currency_code: companyCountry.currency_code,
-    country_code: companyCountry.country_code,
-    vat: companyCountry.vat,
-    water_bill_template_id: DEFAULT_WATER_BILL_TEMPLATE_ID,
-  };
-  await admin
-    .firestore()
-    .collection(HOUSING_COMPANIES)
-    .doc(housingCompanyId)
-    .set(housingCompany);
-  await addHousingCompanyToUser(housingCompanyId, userId);
-  housingCompany.is_user_owner = true;
-  housingCompany.is_user_manager = true;
-  const building = request.body.building;
-  if (building) {
-    const houseCodes = request.body.house_codes;
-    const apartments = await addMultipleApartmentsInBuilding(
-      housingCompanyId,
-      building,
-      houseCodes
-    );
-    if (apartments) {
-      response.status(200).send({
-        apartments: [apartments],
-        id: housingCompanyId,
-        name: housingCompanyName,
-        owners: [userId],
-        managers: [userId],
+  try {
+    const companyCountry = await getCountryData(countryCode?.toString() ?? "fi");
+    // @ts-ignore
+    const userId = request.user?.uid;
+    const user = await retrieveUser(userId);
+    if (!user) { 
+      response.status(500).send({
+        errors: {
+          error: "User not found",
+          code: "user_not_found",
+        },
       });
       return;
     }
+    const businessId = request.body.business_id;
+    const housingCompany: Company = {
+      id: housingCompanyId,
+      name: housingCompanyName,
+      owners: [userId],
+      managers: [userId],
+      credit_amount: 0,
+      created_on: new Date().getTime(),
+      apartment_count: 0,
+      is_deleted: false,
+      currency_code: companyCountry.currency_code,
+      country_code: companyCountry.country_code,
+      vat: companyCountry.vat,
+      water_bill_template_id: DEFAULT_WATER_BILL_TEMPLATE_ID,
+      payment_account_id: "",
+      business_id: businessId ?? "",
+    };
+    await admin
+      .firestore()
+      .collection(HOUSING_COMPANIES)
+      .doc(housingCompanyId)
+      .set(housingCompany);
+    await addHousingCompanyToUser(housingCompanyId, userId);
+    const paymentAccount = await createConnectAccount(
+      user.email,
+      companyCountry.country_code,
+      housingCompanyName, 
+      housingCompanyId,
+      businessId? "company" : "individual");
+    if (paymentAccount) {
+      housingCompany.payment_account_id = paymentAccount.id;
+      await admin
+        .firestore()
+        .collection(HOUSING_COMPANIES)
+        .doc(housingCompanyId)
+        .update({payment_account_id: paymentAccount.id});
+    }
+    housingCompany.is_user_owner = true;
+    housingCompany.is_user_manager = true;
+    const building = request.body.building;
+    if (building) {
+      const houseCodes = request.body.house_codes;
+      const apartments = await addMultipleApartmentsInBuilding(
+        housingCompanyId,
+        building,
+        houseCodes
+      );
+      if (apartments) {
+        response.status(200).send({
+          apartments: [apartments],
+          id: housingCompanyId,
+          name: housingCompanyName,
+          owners: [userId],
+          managers: [userId],
+        });
+        return;
+      }
+    }
+    response.status(200).send(housingCompany);
+  } catch (e) {
+    console.error(e);
+    response.status(500).send({
+      errors: {
+        error: e,
+        code: "unknown_error",
+      },
+    });
   }
-  response.status(200).send(housingCompany);
+  
 };
 
 export const getHousingCompanies = async (
@@ -191,57 +232,15 @@ export const getHousingCompany = async (
       });
       return;
     }
-    const companies = (
-      await admin
-        .firestore()
-        .collection(HOUSING_COMPANIES)
-        .where("id", "==", companyId)
-        .limit(1)
-        .get()
-    ).docs.map((doc) => doc.data());
-    const data = companies[0] as Company;
-    if (
-      data.cover_image_storage_link &&
-      data.cover_image_storage_link.toString().length > 0 &&
-      (data.cover_image_url_expiration ?? Date.now()) <= Date.now()
-    ) {
-      const expiration = Date.now() + 604000;
-      const coverImageUrl = await getPublicLinkForFile(
-        data.cover_image_storage_link,
-        expiration
-      );
-      data.cover_image_url = coverImageUrl;
-      admin
-        .firestore()
-        .collection(HOUSING_COMPANIES)
-        .doc(companyId?.toString() ?? "")
-        .update({
-          cover_image_url: coverImageUrl,
-          cover_image_url_expiration: expiration,
-        });
+    const data = await getCompanyData(companyId?.toString() ?? "");
+    if (data) {
+      data.is_user_owner =
+        (await isCompanyOwner(userId, companyId?.toString() ?? "")) !== undefined;
+      data.is_user_manager =
+        (await isCompanyManager(userId, companyId?.toString() ?? "")) !==
+        undefined;
     }
-    if (
-      data.logo_storage_link &&
-      data.logo_storage_link.toString().length > 0 &&
-      (data.logo_url_expiration ?? Date.now()) <= Date.now()
-    ) {
-      const expiration = Date.now() + 604000;
-      const logoUrl = await getPublicLinkForFile(
-        data.logo_storage_link,
-        expiration
-      );
-      data.logo_url = logoUrl;
-      admin
-        .firestore()
-        .collection(HOUSING_COMPANIES)
-        .doc(companyId?.toString() ?? "")
-        .update({ logo_url: logoUrl, logo_url_expiration: expiration });
-    }
-    data.is_user_owner =
-      (await isCompanyOwner(userId, companyId?.toString() ?? "")) !== undefined;
-    data.is_user_manager =
-      (await isCompanyManager(userId, companyId?.toString() ?? "")) !==
-      undefined;
+    
     response.status(200).send(data);
   } catch (errors) {
     console.log(errors);
@@ -400,6 +399,28 @@ export const getCompanyData = async (
       .doc(companyId)
       .update({ logo_url: logoUrl, logo_url_expiration: expiration });
   }
+  if (!company.payment_account_id ||
+      company.payment_account_id.length === 0 && 
+      (company.owners?.length ?? 0) > 0) {
+    const ownerId = company.owners![0];
+    const owner = await retrieveUser(ownerId);
+    if (!owner) {
+      return company;
+    }
+    const paymentAccount = await createConnectAccount(
+      owner.email,
+      company.country_code ?? "fi",
+      company.name ?? "",
+      company.id,
+      "company"
+      );
+    await admin
+      .firestore()
+      .collection(HOUSING_COMPANIES)
+      .doc(companyId)
+      .update({ payment_account_id: paymentAccount.id });
+    company.payment_account_id = paymentAccount.id;
+  }
   return company;
 };
 
@@ -476,7 +497,9 @@ export const retrieveUsers = async (userIds: string[]) => {
   await Promise.all(
     userIds.map(async (id) => {
       const user = await retrieveUser(id);
-      users.push(user);
+      if (user) {
+        users.push(user);
+      }
     })
   );
   return users;
@@ -538,7 +561,9 @@ export const getCompanyManagerDetails = async (
   await Promise.all(
     userIds.map(async (id) => {
       const user = await retrieveUser(id);
-      users.push(user);
+      if (user) {
+        users.push(user); 
+      }
     })
   );
   return users;
@@ -547,8 +572,12 @@ export const getCompanyManagerDetails = async (
 export const joinWithCode = async (request: Request, response: Response) => {
   const invitationCode = request.body.invitation_code;
    // @ts-ignore
-   const userId = request.user?.uid;
-   const user = await retrieveUser(userId);
+  const userId = request.user?.uid;
+  const user = await retrieveUser(userId);
+  if (!user) { 
+    response.status(403).send({ errors: { error: "Unauthorized", code: "not_manager" } });
+    return;
+  }
   const apartment = await codeValidation(
     invitationCode,
     user.email,
@@ -819,5 +848,193 @@ export const addNewManager = async (request: Request, response: Response) => {
     console.log(errors);
     response.status(500).send({ errors: errors });
     return;
+  }
+};
+
+export const setUpPaymentAccountRequest = async ( 
+  request: Request,
+  response: Response) => { 
+  // @ts-ignore
+  const userId = request.user?.uid;
+  const companyId = request.body?.housing_company_id;
+  const companyOwner = await isCompanyOwner(userId, companyId);
+  if (!companyOwner) {
+    response.status(403).send({ errors: "not_owner" });
+    return;
+  }
+  const user = await retrieveUser(userId);
+  if (!user) {
+    response.status(403).send({ errors: "user_not_found" });
+    return;
+  }
+  if (!companyOwner.payment_account_id || companyOwner.payment_account_id === "") { 
+    const paymentAccount = await createConnectAccount(
+      user.email,
+      companyOwner.country_code ?? "fi",
+      companyOwner.name ?? "Housing company",
+      companyOwner.id,
+      "company"
+    );
+    if (paymentAccount) { 
+      await admin.firestore().collection(HOUSING_COMPANIES).doc(companyId).update({ payment_account_id: paymentAccount.id });
+      companyOwner.payment_account_id = paymentAccount.id;
+    }
+  }
+  const paymentAccountLinks = await createConnectAccountLink(companyOwner.payment_account_id, companyOwner.id);
+  response.status(200).send(paymentAccountLinks); 
+}
+
+/*export const retrieveCompanyConnectAccountRequest = 
+  async (request: Request , response: Response) => {
+    // @ts-ignore
+    const userId = request.user?.uid;
+    const companyId = request.query.company_id ?? "";
+    const companyManager = await isCompanyManager(userId, companyId.toString());
+    if (!companyManager) { 
+      response.status(403).send({
+        errors: {
+          error: "User not authorized",
+          code: "not_authorized",
+        },
+      });
+      return;
+    }
+    try { 
+      const connectAccount = await retrieveConnectAccount(companyManager.payment_account_id);
+      response.status(204).send(connectAccount);
+    } catch (e) { 
+      console.log(e);
+      response.status(500).send({
+        errors: {
+          error: e,
+          code: "unknown_error",
+        },
+      });
+    }
+   
+  }*/
+
+export const getCompanyPaymentProductItemRequest = async (
+    request: Request,
+    response: Response
+  ) => {
+    // @ts-ignore
+    const userId = request.user?.uid;
+    const companyId = request.query.company_id ?? "";
+    const companyManager = await isCompanyManager(userId, companyId.toString());
+    if (!companyManager) { 
+      response.status(403).send({
+        errors: {
+          error: "User not authorized",
+          code: "not_authorized",
+        },
+      });
+      return;
+    }
+    
+    const productItems = (
+      await admin
+        .firestore()
+        .collection(PAYMENT_PRODUCT_ITEMS)
+        .where("is_active", "==", true)
+        .where("company_id", "==", companyId)
+        .get()
+    ).docs.map((doc) => doc.data());
+    response.send(productItems);
+  };
+
+export const addCompanyPaymentProductItemRequest = async (
+  request: Request,
+  response: Response
+) => {
+  
+  const { amount, name, description = "", company_id, tax_percentage } = request.body;
+  // @ts-ignore
+  const userId = request.user.uid;
+  const company = await isCompanyManager(userId, company_id);
+  if (!company) {
+    response.status(403).send({ errors: "not_manager" });
+    return;
+  }
+  const paymentProducItem = await addCompanyPaymentProductItem(company, name, description, tax_percentage, amount);
+  if (!paymentProducItem) {
+    response.status(500).send({ errors: "unknown" });
+  }
+  try {
+    response.send(paymentProducItem);
+  } catch (error) {
+    response.sendStatus(500);
+  }
+};
+
+export const addCompanyPaymentProductItem = async (
+  company: Company, 
+  name: string, 
+  description: string,
+  tax_percentage: number,
+  amount: number) : Promise<PaymentProductItem|undefined> => {
+    try {
+      const stripeProduct = await addStripeProductForConnectAccount(
+        company.payment_account_id,
+        name,
+        company.currency_code,
+        amount
+      );
+      const stripeProductId = stripeProduct.id;
+      const stripePriceId = stripeProduct.default_price;
+      const id = admin.firestore().collection(PAYMENT_PRODUCT_ITEMS).doc().id;
+      const paymentProducItem: PaymentProductItem = {
+        description,
+        id,
+        name,
+        amount,
+        tax_percentage,
+        currency_code: company.currency_code ?? 'eur',
+        country_code: company.country_code ?? 'fi',
+        is_active: true,
+        stripe_product_id: stripeProductId,
+        stripe_price_id: stripePriceId,
+        created_on: Date.now(),
+        company_id: company.id,
+      };
+      await admin
+        .firestore()
+        .collection(PAYMENT_PRODUCT_ITEMS)
+        .doc(id)
+        .set(paymentProducItem);
+      return paymentProducItem;
+    } catch (error) {
+      console.log(error);
+    }
+}
+
+export const deletePaymentProductItemRequest = async (
+  request: Request,
+  response: Response
+) => {
+  const { id, company_id } = request.query;
+  // @ts-ignore
+  const userId = request.user.uid;
+  if (!(await isCompanyManager(userId, company_id?.toString() ?? ""))) {
+    response.sendStatus(403);
+    return;
+  }
+  try {
+    const productItem = (await admin
+      .firestore()
+      .collection(PAYMENT_PRODUCT_ITEMS)
+      .doc(id?.toString() ?? "").get()).data() as PaymentProductItem;
+    if (productItem.company_id !== company_id) {
+      response.status(403).send({ errors: "not_company_item" });
+      return;
+    }
+    await admin
+      .firestore()
+      .collection(PAYMENT_PRODUCT_ITEMS)
+      .doc(id?.toString() ?? "")
+      .update({ is_active: false });
+    response.sendStatus(200);
+  } catch (error) {
+    response.sendStatus(500);
   }
 };

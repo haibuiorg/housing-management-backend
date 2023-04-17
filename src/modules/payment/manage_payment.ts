@@ -12,6 +12,7 @@ import {
   IS_DELETED,
 } from "../../constants";
 import { BankAccount } from "../../dto/bank_account";
+import { addExternalPaymentBankAccount, deleteExternalPaymentBankAccount } from "../payment-externals/payment-service";
 
 export const getCompanyBankAccountRequest = async (
   request: Request,
@@ -49,6 +50,7 @@ export const addCompanyBankAccountRequest = async (
   const housingCompanyId = request.body.housing_company_id?.toString() ?? "";
   const swift = request.body.swift?.toString() ?? "";
   const bankAccountNumber = request.body.bank_account_number?.toString() ?? "";
+  const accountHolderName = request.body.account_holder_name;
   if (swift.length === 0 || bankAccountNumber.length === 0) {
     response
       .status(500)
@@ -56,12 +58,13 @@ export const addCompanyBankAccountRequest = async (
         errors: { error: "Missing params", code: "missing_query_params" },
       });
   }
-  if (!(await isCompanyOwner(userId, housingCompanyId))) {
+  const company = await isCompanyOwner(userId, housingCompanyId)
+  if (!company) {
     response
       .status(403)
       .send({ errors: { error: "Not owner", code: "not_owner" } });
   }
-  const id = admin
+  /*const id = admin
     .firestore()
     .collection(HOUSING_COMPANIES)
     .doc(housingCompanyId)
@@ -73,16 +76,12 @@ export const addCompanyBankAccountRequest = async (
     bank_account_number: bankAccountNumber,
     is_deleted: false,
     housing_company_id: housingCompanyId,
-  };
+    external_payment_account_id: null,
+    account_holder_name: accountHolderName ?? company?.name,
+  };*/
   try {
-    await admin
-      .firestore()
-      .collection(HOUSING_COMPANIES)
-      .doc(housingCompanyId)
-      .collection(BANK_ACCOUNTS)
-      .doc(id)
-      .set(bankAccount);
-    response.status(200).send(bankAccount);
+    const bankAccount = await addExternalPaymentBankAccount(company!, swift, bankAccountNumber, accountHolderName);
+    response.sendStatus(200);
   } catch (errors) {
     console.log(errors);
     response.status(500).send({ errors: errors });
@@ -104,12 +103,20 @@ export const deleteCompanyBankAccountRequest = async (
         errors: { error: "Missing params", code: "missing_query_params" },
       });
   }
-  if (!(await isCompanyOwner(userId, housingCompanyId))) {
+  const company = await isCompanyOwner(userId, housingCompanyId)
+  if (!company) {
     response
       .status(403)
       .send({ errors: { error: "Not owner", code: "not_owner" } });
   }
   try {
+    const bankAccount = (await admin
+      .firestore()
+      .collection(HOUSING_COMPANIES)
+      .doc(housingCompanyId)
+      .collection(BANK_ACCOUNTS)
+      .doc(bankAccountId).get()).data() as BankAccount;
+    await deleteExternalPaymentBankAccount(company!, bankAccount.external_payment_account_id ?? '');
     await admin
       .firestore()
       .collection(HOUSING_COMPANIES)

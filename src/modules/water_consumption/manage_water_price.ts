@@ -17,6 +17,7 @@ import {
 } from "../authentication/authentication";
 import { sendTopicNotification } from "../notification/notification_service";
 import { getUserDisplayName } from "../user/manage_user";
+import { addCompanyPaymentProductItem } from "../housing/manage_housing_company";
 
 export const addNewWaterPrice = async (
   request: Request,
@@ -35,12 +36,23 @@ export const addNewWaterPrice = async (
       .doc().id;
     const basicFee = request.body.basic_fee ?? 0;
     const pricePerCube = request.body.price_per_cube ?? 0;
+    const basicFeePaymentProduct = await addCompanyPaymentProductItem(
+      company, "Basic fee", "Basic fee for water consumption", 24, basicFee
+    )
+    const pricePerCubePaymentProduct = await addCompanyPaymentProductItem(
+      company, "Price per cube", "Price per cube", 24, pricePerCube
+    )
+    if (!basicFeePaymentProduct || !pricePerCubePaymentProduct) {
+      return response.status(500).send("Error while creating payment product items");
+    }
     const waterPrice: WaterPrice = {
       basic_fee: basicFee,
       price_per_cube: pricePerCube,
       is_active: true,
       id: waterPriceId,
       updated_on: new Date().getTime(),
+      basic_fee_payment_product_item_id:  basicFeePaymentProduct.id,
+      price_per_cube_payment_product_item_id: pricePerCubePaymentProduct.id,
     };
     try {
       const distplayName = await getUserDisplayName(userId, companyId);
@@ -93,11 +105,6 @@ export const deleteWaterPrice = async (
   const userId = request.user?.uid;
   const waterPriceId = request.body.id;
   if ((await isCompanyManager(userId, companyId)) && waterPriceId) {
-    const waterPrice: WaterPrice = {
-      is_active: false,
-      updated_on: new Date().getTime(),
-      id: waterPriceId,
-    };
     try {
       await admin
         .firestore()
@@ -105,8 +112,12 @@ export const deleteWaterPrice = async (
         .doc(companyId)
         .collection(WATER_PRICE)
         .doc(waterPriceId)
-        .update(waterPrice);
-      response.status(200).send(waterPrice);
+        .update({
+          is_active: false,
+          updated_on: new Date().getTime(),
+          id: waterPriceId,
+        });
+      response.sendStatus(200);
     } catch (errors) {
       response.status(500).send({ errors: errors });
     }
@@ -159,7 +170,7 @@ export const getActiveWaterPrice = async (companyId: string) => {
       .limit(1)
       .get()
   ).docs.map((doc) => doc.data());
-  return waterPrices[0];
+  return waterPrices[0] as WaterPrice;
 };
 
 export const getWaterPriceHistory = async (companyId: string) => {

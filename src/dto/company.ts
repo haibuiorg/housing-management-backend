@@ -4,7 +4,7 @@ import { NotificationChannel } from "./notification_channel";
 import { UI } from "./ui";
 
 export interface Company extends FirebaseObject {
-  id?: string;
+  id: string;
   street_address_1?: string;
   street_address_2?: string;
   postal_code?: string;
@@ -32,4 +32,5 @@ export interface Company extends FirebaseObject {
   address?: Address[];
   created_on?: number;
   credit_amount: number;
+  payment_account_id: string;
 }

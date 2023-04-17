@@ -262,15 +262,6 @@ const subscribeOrUnsubscribeToChannels = async (
               channels: firestore.FieldValue.arrayRemove(unsubscribedChannels),
             });
         }
-        await admin
-          .firestore()
-          .collection(USERS)
-          .doc(userId)
-          .collection(NOTIFICATION_TOKENS)
-          .doc(id)
-          .update({
-            channels: firestore.FieldValue.arrayRemove(unsubscribedChannels),
-          });
       } catch (error) {
         console.log(error);
       }

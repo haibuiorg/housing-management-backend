@@ -26,7 +26,6 @@ export const registerWithCode = async (
 ) => {
   const invitationCode = request.body.invitation_code;
   const email = request.body.email;
-  console.log(request.body);
   const apartment = await codeValidation(
     invitationCode,
     email

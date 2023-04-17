@@ -188,6 +188,9 @@ export const generateLatestWaterBill = async (
       bankAccounts,
       apartment
     );
+    if (!invoice) { 
+      return undefined;
+    }
     /*const link = await generatePdf(
       id?.toString() ?? "",
       HOUSING_COMPANIES +
@@ -241,8 +244,11 @@ const updateBillTemplate = async (
   bankAccounts: BankAccount[],
   apartment: Apartment
 
-) : Promise<Invoice> => {
+) : Promise<Invoice| undefined> => {
   const user = await retrieveUser(userId);
+  if (!user) { 
+    return undefined;
+  }
   if (!user.addresses || user.addresses?.length === 0 ) {
     user.addresses = [
       {
@@ -263,32 +269,26 @@ const updateBillTemplate = async (
      differenceBetweenPeriod * (waterConsumption.price_per_cube ?? 1);
   const basicFee = (waterConsumption.basic_fee ?? 1) / (company.apartment_count ?? 1);
   
-  const invoiceItems : InvoiceItem[] = []
+  const invoiceItems : {payment_product_id: string, quantity: number,}[] = []
   invoiceItems.push({
-    name: "Basic fee",
+    payment_product_id: waterConsumption.basic_fee_product_id ?? "", 
     quantity: (1 / (company.apartment_count ?? 1)),
-    total: basicFee * (1 + (company.vat ?? 0.24)),
-    description: "Basic fee",
-    unit_cost:  waterConsumption.basic_fee,
-    tax_percentage: (company.vat ?? 0.24) * 100
   });
   invoiceItems.push({
-    name: "Water price",
+    payment_product_id: waterConsumption.price_per_cube_product_id ?? "",
     quantity: differenceBetweenPeriod,
-    total: waterPrice * (1 + (company.vat ?? 0.24)),
-    description: "Water price",
-    unit_cost:  waterConsumption.price_per_cube,
-    tax_percentage: (company.vat ?? 0.24) * 100
   }); 
   const params : GenerateInvoiceParams = {
     userId,
     company,
     invoiceName,
-    reveiverDetail: [user],
+    receiverDetail: [user],
     bankAccount: bankAccounts[0],
     paymentDateInMs: Date.now() + 1209600000,
     shouldSendEmail: true,
+    issueExternalInvoice: false,
     items: invoiceItems,
+    additionalInvoiceCost: 0,
   }
 
   const invoiceList = await generateInvoiceList(params);

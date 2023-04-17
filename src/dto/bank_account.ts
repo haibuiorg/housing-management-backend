@@ -6,4 +6,6 @@ export interface BankAccount extends FirebaseObject {
   id: string;
   is_deleted: boolean;
   housing_company_id: string;
+  external_payment_account_id: string | null;
+  account_holder_name: string;
 }

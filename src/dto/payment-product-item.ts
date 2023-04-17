@@ -11,4 +11,6 @@ export interface PaymentProductItem extends FirebaseObject {
   stripe_product_id: string;
   stripe_price_id: string;
   created_on: number;
+  tax_percentage: number;
+  company_id: string | null;
 }

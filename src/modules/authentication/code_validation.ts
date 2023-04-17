@@ -26,7 +26,7 @@ export const codeValidation = async (
     const codeData = await admin
       .firestore()
       .collection(INVITATION_CODES)
-      .where('email', '==', email)
+      .where('email', '==', email.toLowerCase())
       .where(CODE, "==", code)
       .where(IS_VALID, ">=", 1)
       .get();
@@ -109,7 +109,7 @@ export const inviteTenants = async (request: Request, response: Response) => {
         apartment_id: apartmentId,
         housing_company_id: companyId,
         claimed_by: null,
-        email: email,
+        email: email.toLowerCase(),
         email_sent: 1,
         invite_retry_limit: inviteRetryLimit,
       };

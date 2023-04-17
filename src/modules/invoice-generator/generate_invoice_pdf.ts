@@ -35,7 +35,7 @@ export const generateInvoicePdf = async (
   await generateHeader(doc, company);
   generateCustomerInformation(doc, invoice, receiverName, receiverAddress);
   generateInvoiceTable(doc, invoice);
-  generateFooter(doc, bankAccount, invoice);
+  generateFooter(doc, company, bankAccount, invoice);
   doc.end();
   doc.pipe(googleCloudStorageUpload);
 };
@@ -87,7 +87,7 @@ const generateCustomerInformation = (
     .text(formatDate(new Date()), 150, customerInformationTop + 15)
     .text("Balance Due:", 50, customerInformationTop + 30)
     .text(
-      formatCurrency(invoice.subtotal - invoice.paid),
+      formatCurrency(invoice.currency_code, invoice.subtotal - invoice.paid),
       150,
       customerInformationTop + 30
     )
@@ -138,12 +138,12 @@ const generateInvoiceTable = (doc: PDFKit.PDFDocument, invoice: Invoice) => {
     generateTableRow(
       doc,
       position,
-      item.name,
-      item.description,
-      formatCurrency(item.unit_cost),
+      item.payment_product_item.name,
+      item.payment_product_item.description,
+      formatCurrency(invoice.currency_code, item.payment_product_item.amount / (1 + item.payment_product_item.tax_percentage / 100)),
       item.quantity.toFixed(0),
-      (item.tax_percentage ?? 0).toFixed(2),
-      formatCurrency(item.total)
+      (item.payment_product_item.tax_percentage ?? 0).toFixed(2),
+      formatCurrency(invoice.currency_code, item.payment_product_item.amount)
     );
 
     generateHr(doc, position + 20);
@@ -158,7 +158,7 @@ const generateInvoiceTable = (doc: PDFKit.PDFDocument, invoice: Invoice) => {
     "Subtotal",
     "",
     "",
-    formatCurrency(invoice.subtotal)
+    formatCurrency(invoice.currency_code, invoice.subtotal)
   );
 
   const paidToDatePosition = subtotalPosition + 20;
@@ -170,7 +170,7 @@ const generateInvoiceTable = (doc: PDFKit.PDFDocument, invoice: Invoice) => {
     "Paid To Date",
     "",
     "",
-    formatCurrency(invoice.paid)
+    formatCurrency(invoice.currency_code, invoice.paid)
   );
 
   const duePosition = paidToDatePosition + 25;
@@ -183,13 +183,14 @@ const generateInvoiceTable = (doc: PDFKit.PDFDocument, invoice: Invoice) => {
     "Balance Due",
     "",
     "",
-    formatCurrency(invoice.subtotal - invoice.paid)
+    formatCurrency(invoice.currency_code, invoice.subtotal - invoice.paid)
   );
   doc.font("Helvetica");
 };
 
 const generateFooter = (
   doc: PDFKit.PDFDocument,
+  company: Company,
   bankAccount: BankAccount,
   invoice: Invoice
 ) => {
@@ -198,20 +199,23 @@ const generateFooter = (
     .text(`Payment is due on: ${new Date(invoice.payment_date)}`, 50, 600, {
       align: "center",
     })
-    .text(`IBAN: ${bankAccount.bank_account_number}`, 50, 620, {
+    .text(`Account name: ${company.name}`, 50, 620, {
       align: "center",
     })
-    .text(`SWIFT/BIC: ${bankAccount.swift}`, 50, 640, { align: "center" })
-    .text(`Reference number: ${invoice.reference_number ?? ""}`, 50, 660, {
+    .text(`IBAN: ${bankAccount.bank_account_number}`, 50, 640, {
+      align: "center",
+    })
+    .text(`SWIFT/BIC: ${bankAccount.swift}`, 50, 660, { align: "center" })
+    .text(`Reference number: ${invoice.reference_number ?? ""}`, 50, 680, {
       align: "center",
     })
     .text(
       `Virtual barcode: ${invoice.virtual_barcode ?? "Not available"}`,
       50,
-      680,
+      700,
       { align: "center" }
     )
-    .text("Invoice created with Priorli", 50, 700, {
+    .text("Invoice created with Priorli", 50, 720, {
       align: "center",
       link: "www.priorli.com",
       underline: true,
@@ -220,7 +224,7 @@ const generateFooter = (
   codes.loadModules(["code128"], { includetext: false });
   const logo = codes.create("code128", invoice.virtual_barcode);
   if (logo) {
-    doc.image(logo, 50, 750, {
+    doc.image(logo, 50, 770, {
       align: "center",
       width: doc.page.width - 100,
       height: 64,
@@ -253,7 +257,7 @@ const generateHr = (doc: PDFKit.PDFDocument, y: number) => {
   doc.strokeColor("#aaaaaa").lineWidth(1).moveTo(50, y).lineTo(550, y).stroke();
 };
 
-const formatCurrency = (val: number) => {
+const formatCurrency = (currencyCode: string, val: number) => {
   return "€" + val.toFixed(2);
 };
 

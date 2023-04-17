@@ -1,4 +1,5 @@
 import { FirebaseObject } from "./firebase_object";
+import { PaymentProductItem } from "./payment-product-item";
 
 export interface Invoice extends FirebaseObject {
   id: string;
@@ -21,6 +22,7 @@ export interface Invoice extends FirebaseObject {
   currency_code: string;
   additional_invoice_links: string[];
   bank_account_id: string;
+  updated_on: number|null;
 }
 
 export interface InvoiceGroup extends FirebaseObject {
@@ -34,10 +36,6 @@ export interface InvoiceGroup extends FirebaseObject {
 }
 
 export interface InvoiceItem extends FirebaseObject {
-  name: string;
-  description: string;
-  unit_cost: number;
+  payment_product_item: PaymentProductItem;
   quantity: number;
-  total: number;
-  tax_percentage: number;
 }

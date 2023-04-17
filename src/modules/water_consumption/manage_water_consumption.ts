@@ -53,13 +53,13 @@ export const startNewWaterConsumptionPeriod = async (
     );
     const waterConsumption: WaterConsumption = {
       year: currentYear,
-      basic_fee: activeWaterPrice.basic_fee,
+      basic_fee: activeWaterPrice.basic_fee ?? 0,
       id: waterConsumptionId,
       period: previousPeriod + 1,
       price_id: activeWaterPrice.id,
-      price_per_cube: activeWaterPrice.price_per_cube,
+      price_per_cube: activeWaterPrice.price_per_cube ?? 0,
       total_reading: totalReading,
-      created_on: new Date().getTime(),
+      created_on: Date.now(),
     };
     await admin
       .firestore()

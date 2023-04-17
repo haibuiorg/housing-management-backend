@@ -88,7 +88,7 @@ export const addPaymentProductItem = async (
   request: Request,
   response: Response
 ) => {
-  const { amount, name, country_code, description = "" } = request.body;
+  const { amount, name, country_code, description = "", tax_percentage } = request.body;
   // @ts-ignore
   const userId = request.user.uid;
   if (!(await isAdminRole(userId))) {
@@ -109,12 +109,14 @@ export const addPaymentProductItem = async (
     id,
     name,
     amount,
+    tax_percentage : tax_percentage ?? 0,
     currency_code: country.currency_code,
     country_code,
     is_active: true,
     stripe_product_id: stripeProductId,
     stripe_price_id: stripePriceId,
     created_on: Date.now(),
+    company_id: null,
   };
   try {
     await admin
@@ -161,6 +163,7 @@ export const getPaymentProductItems = async (
       .collection(PAYMENT_PRODUCT_ITEMS)
       .where(IS_ACTIVE, "==", true)
       .where(COUNTRY_CODE, "==", country_code)
+      .where("company_id", "==", null)
       .get();
     const paymentProductItemsList = paymentProductItems.docs.map(
       (doc) => doc.data() as PaymentProductItem
