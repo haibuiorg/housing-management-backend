@@ -155,8 +155,25 @@ export const addHousingCompanyToUser = async (
     .set({
       user_id: userId,
       id: housingCompanyId,
+      is_deleted: false,
     });
 };
+
+export const removeCompanyFromUser = async (
+  housingCompanyId: string,
+  userId: string
+) => {
+  await admin
+    .firestore()
+    .collection(USERS)
+    .doc(userId)
+    .collection(HOUSING_COMPANIES)
+    .doc(housingCompanyId)
+    .update({
+      is_deleted: true,
+    });
+};
+
 
 export const getUserDisplayName = async (userId: string, companyId: string) => {
   const user = (await retrieveUser(userId)) as User;

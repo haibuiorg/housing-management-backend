@@ -1,4 +1,5 @@
 import { FirebaseObject } from "./firebase_object";
+import { Translation } from "./translation";
 
 export interface StorageItem extends FirebaseObject {
   id?: string;
@@ -10,4 +11,5 @@ export interface StorageItem extends FirebaseObject {
   uploaded_by?: string;
   type?: string;
   name?: string;
+  summary_translations: Translation[] | null;
 }

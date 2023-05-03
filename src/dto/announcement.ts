@@ -13,4 +13,7 @@ export interface Announcement extends FirebaseObject {
   display_name?: string;
   is_deleted?: boolean;
   storage_items?: StorageItem[];
+  translated_title?: {language_code: string, value: string}[];
+  translated_subtitle?: {language_code: string, value: string}[];
+  translated_body?: {language_code: string, value: string}[];
 }

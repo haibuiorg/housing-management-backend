@@ -2,12 +2,12 @@ import { Request, Response } from "express";
 import admin from "firebase-admin";
 import {
   getUserApartments,
-  isApartmentIdTenant,
 } from "../housing/manage_apartment";
 import { ADMIN, APARTMENTS, HOUSING_COMPANIES } from "../../constants";
 import { getCompanyData } from "../housing/manage_housing_company";
-import { retrieveUser } from "../user/manage_user";
+import { removeCompanyFromUser, retrieveUser } from "../user/manage_user";
 import { Company } from "../../dto/company";
+import { Apartment } from "../../dto/apartment";
 
 export const validateIdTokenAllowAnonymous = async (
   req: Request,
@@ -74,8 +74,9 @@ export const isAuthorizedAccessToApartment = async (
   userId: string,
   companyId: string,
   apartmentId: string
-) => {
-  const apartment = await isApartmentIdTenant(userId, companyId, apartmentId);
+) : Promise<Apartment|undefined> => {
+  const apartment = await isApartmentIdTenant(userId, companyId, apartmentId) ?? await isApartmentOwner(userId, companyId, apartmentId);
+  
   if (!apartment) {
     if (
       (await isCompanyManager(userId, companyId)) ||
@@ -88,12 +89,92 @@ export const isAuthorizedAccessToApartment = async (
         .collection(APARTMENTS)
         .doc(apartmentId)
         .get();
-      return adminApartment.data();
+      return adminApartment.data() as Apartment;
     }
-    return undefined;
+    return;
   }
   return apartment;
 };
+
+export const removeUserFromApartment = async (
+  removedUserId: string,
+  companyId: string,
+  apartmentId: string
+) => {
+  await admin
+    .firestore()
+    .collection(HOUSING_COMPANIES)
+    .doc(companyId)
+    .collection(APARTMENTS)
+    .doc(apartmentId)
+    .update({
+      tenants: admin.firestore.FieldValue.arrayRemove(removedUserId),
+    });
+ 
+};
+
+export const removeUserAsOwnerFromApartment = async (
+  removedUserId: string,
+  companyId: string,
+  apartmentId: string
+) => {
+  await admin
+  .firestore()
+  .collection(HOUSING_COMPANIES)
+  .doc(companyId)
+  .collection(APARTMENTS)
+  .doc(apartmentId)
+  .update({
+    owners: admin.firestore.FieldValue.arrayRemove(removedUserId),
+  });
+};
+
+export const removeUserAsCompanyManger = async (  
+  removedUserId: string,
+  companyId: string,
+  ) => {
+    await admin
+    .firestore()
+    .collection(HOUSING_COMPANIES)
+    .doc(companyId)
+    .update({
+      managers: admin.firestore.FieldValue.arrayRemove(removedUserId),
+    });
+}
+
+export const removeUserAsCompanyOwner = async (  
+  removedUserId: string,
+  companyId: string,
+  ) => {
+    await admin
+    .firestore()
+    .collection(HOUSING_COMPANIES)
+    .doc(companyId)
+    .update({
+      owners: admin.firestore.FieldValue.arrayRemove(removedUserId),
+    });
+}
+
+export const removeUserFromCompany = async (
+  removedUserId: string,
+  housingCompanyId: string,
+) => {
+  try {
+    const apartments = await getUserApartments(removedUserId, housingCompanyId);
+    await Promise.all((apartments ?? []).map(async (apartment) => {
+      await removeUserFromApartment(removedUserId, housingCompanyId, apartment.id);
+    }));
+  } catch (errors) {
+    console.log(errors);
+  }
+  try {
+    removeCompanyFromUser(removedUserId, housingCompanyId);
+  } catch (errors) {
+    console.log(errors);
+  }
+ 
+}
+
 
 export const isCompanyOwner = async (
   userId: string,
@@ -103,13 +184,13 @@ export const isCompanyOwner = async (
   if (company?.owners?.includes(userId) || (await isAdminRole(userId))) {
     return company;
   }
-  return undefined;
+  return;
 };
 
 export const isCompanyManager = async (
   userId: string,
   housingCompanyId: string
-) => {
+) : Promise<Company|undefined> => {
   if ((housingCompanyId?.length ?? 0) === 0) {
     return undefined;
   }
@@ -121,13 +202,13 @@ export const isCompanyManager = async (
   ) {
     return company;
   }
-  return undefined;
+  return;
 };
 
 export const isCompanyTenant = async (
   userId: string,
   housingCompanyId: string
-) => {
+) : Promise<boolean> => {
   try {
     const tenants = await getUserApartments(userId, housingCompanyId);
     return (
@@ -145,3 +226,34 @@ export const isAdminRole = async (userId: string) => {
   const user = await retrieveUser(userId);
   return user?.roles.includes(ADMIN);
 };
+
+export const isApartmentIdTenant = async (
+  userId: string,
+  housingCompanyId: string,
+  apartmentId: string
+):  Promise<Apartment| undefined> => {
+  const apartment = (await admin
+    .firestore()
+    .collection(HOUSING_COMPANIES)
+    .doc(housingCompanyId)
+    .collection(APARTMENTS)
+    .doc(apartmentId)
+    .get()).data() as Apartment;
+
+  return (apartment?.tenants ??[]).includes(userId)
+    ? apartment
+    : undefined;
+};
+
+export const isApartmentOwner = async ( userId: string, housingCompanyId: string, apartmentId: string) => {
+  const apartment = (await admin
+    .firestore()
+    .collection(HOUSING_COMPANIES)
+    .doc(housingCompanyId)
+    .collection(APARTMENTS)
+    .doc(apartmentId)
+    .get()).data() as Apartment;
+  return (apartment?.owners ??[]).includes(userId)
+  ? apartment
+  : undefined;
+}

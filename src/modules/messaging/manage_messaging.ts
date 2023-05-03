@@ -28,6 +28,8 @@ import {
   getSubscriptionPlanById,
   hasOneActiveSubscription,
 } from "../subscription/subscription-service";
+import { getMessageTranslation, storageItemTranslation } from "../translation/translation_service";
+
 
 export const sendMessage = async (request: Request, response: Response) => {
   const message = request.body.message;
@@ -79,6 +81,7 @@ export const sendMessage = async (request: Request, response: Response) => {
     message: message,
     sender_id: senderId,
     sender_name: senderName,
+    updated_on: createdOn,
     seen_by: [senderId],
   };
   const storageItems = request.body.storage_items;
@@ -93,6 +96,7 @@ export const sendMessage = async (request: Request, response: Response) => {
           storageItemArray.push({
             storage_link: newFileLocation,
             name: lastPath ?? "",
+            summary_translations: null,
           });
         } catch (error) {
           console.log(error);
@@ -112,7 +116,6 @@ export const sendMessage = async (request: Request, response: Response) => {
       .collection(MESSAGES)
       .doc(messageId)
       .set(messageData);
-
     if (conversation) {
       const userIds = (conversation as Conversation).user_ids;
       const sendNotificationUserList = userIds?.filter(
@@ -144,10 +147,42 @@ export const sendMessage = async (request: Request, response: Response) => {
         });
     }
     response.status(200).send(messageData);
+    translateMassage(messageData, mainPath, channelId, conversationId, senderId, type);
+    storageItemTranslation(messageData.storage_items ?? [])
   } catch (errors) {
     response.status(500).send({ errors: errors });
   }
 };
+
+const translateMassage = async (
+    messageData: Message,
+    collection: string,
+    channelId: string,
+    conversationId: string,
+    userId: string, type: string) => {
+  try {
+    const translatedValue = await getMessageTranslation(
+      messageData.message, 
+      channelId,
+      type === COMMUNITY_MESSAGE_TYPE || FAULT_REPORT_MESSAGE_TYPE ? 'message' : 'support',
+      userId);
+    await admin
+      .firestore()
+      .collection(collection)
+      .doc(channelId)
+      .collection(CONVERSATIONS)
+      .doc(conversationId)
+      .collection(MESSAGES)
+      .doc(messageData.id)
+      .update({translated_message: translatedValue, updated_on: new Date().getTime()});
+
+  } catch (error) {
+    console.log(error);
+  }
+}
+
+
+
 
 const getConversationDetail = async (
   type: string,
@@ -410,6 +445,7 @@ export const startNewConversationRequest = async (
       updated_on: createdOn,
       status: "ongoing",
       user_ids: [userId],
+      apartment_id: null,
     };
     await admin
       .firestore()
@@ -461,6 +497,7 @@ export const startNewConversationRequest = async (
       created_on: createdOn,
       updated_on: createdOn,
       user_ids: [userId],
+      apartment_id: null,
     };
     await admin
       .firestore()

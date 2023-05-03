@@ -22,6 +22,7 @@ import {
 } from "../housing/manage_housing_company";
 import { User } from "../../dto/user";
 import { sendFaultReportEmail } from "../email/email_module";
+import { storageItemTranslation } from "../translation/translation_service";
 
 export const createFaultReport = async (
   request: Request,
@@ -65,6 +66,7 @@ export const createFaultReport = async (
     updated_on: createdOn,
     status: "pending",
     user_ids: userIdList,
+    apartment_id: apartmentId,
   };
   await admin
     .firestore()
@@ -108,6 +110,7 @@ export const createFaultReport = async (
           storageItemArray.push({
             storage_link: newFileLocation,
             name: lastPath ?? "",
+            summary_translations: null,
           });
         } catch (error) {
           console.log(error);
@@ -115,6 +118,7 @@ export const createFaultReport = async (
       })
     );
     messageData.storage_items = storageItemArray;
+    
   }
 
   try {
@@ -171,6 +175,7 @@ export const createFaultReport = async (
       );
     }
     response.status(200).send(conversation);
+    storageItemTranslation(storageItemArray);
   } catch (errors) {
     response.status(500).send({ errors: errors });
   }

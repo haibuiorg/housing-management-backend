@@ -57,8 +57,8 @@ export const registerWithCode = async (
       [DEFAULT],
       paymentCustomer.id
     );
-    await addTenantToApartment(userRecord.uid, apartment.housing_company_id!, apartment.id!);
-    await removeCode(invitationCode, apartment.housing_company_id!, userRecord.uid);
+    await addTenantToApartment(userRecord.uid, apartment.housing_company_id!, apartment.id!, invitationCode);
+
     response.status(200).send(user);
     sendVerificationEmail(email);
   } catch (errors) {

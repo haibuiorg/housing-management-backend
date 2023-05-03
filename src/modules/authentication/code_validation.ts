@@ -10,8 +10,7 @@ import {
   IS_VALID,
 } from "../../constants";
 import { sendInvitationEmail } from "../email/email_module";
-import { hasApartment } from "../housing/manage_housing_company";
-import { isCompanyManager } from "./authentication";
+import { isApartmentIdTenant, isApartmentOwner, isCompanyManager } from "./authentication";
 import { Apartment } from "../../dto/apartment";
 import { Invitation } from "../../dto/invitation";
 import { Company } from "../../dto/company";
@@ -54,7 +53,7 @@ export const removeCode = async (
   code: string,
   housingCompanyId: string,
   claimedBy: string
-) => {
+) : Promise<Invitation | undefined> => {
   try {
     const codeData = await admin
       .firestore()
@@ -62,7 +61,7 @@ export const removeCode = async (
       .where(HOUSING_COMPANY_ID, "==", housingCompanyId)
       .where(CODE, "==", code)
       .get();
-    const codeDataFirst = codeData.docs.map((doc) => doc.data())[0];
+    const codeDataFirst = codeData.docs.map((doc) => doc.data())[0] as Invitation;
     if (codeDataFirst) {
       const decrement = firestore.FieldValue.increment(-1);
       await admin
@@ -73,27 +72,37 @@ export const removeCode = async (
           is_valid: decrement,
           claimed_by: claimedBy,
         });
+      return codeDataFirst;
     }
   } catch (error) {
     console.log(error);
+    
   }
+  return;
 };
 
 export const inviteTenants = async (request: Request, response: Response) => {
   const apartmentId = request.body.apartment_id;
   const companyId = request.body.housing_company_id;
   const emailAddresses = request.body.emails;
+  const setAsOwner = request.body.set_as_apartment_owner ?? false;
   // @ts-ignore
   const userId = request.user?.uid;
-  const company = await isCompanyManager(userId, companyId);
+  const companyManager = await isCompanyManager(userId, companyId);
+  const apartmentOwner = await isApartmentOwner(userId, companyId, apartmentId);
   if (
     companyId &&
     apartmentId &&
-    company &&
-    (await hasApartment(apartmentId, companyId))
+    (companyManager || apartmentOwner)
   ) {
+    const companyData = companyManager ?? (await admin
+      .firestore()
+      .collection(HOUSING_COMPANIES)
+      .doc(companyId)
+      .get()).data() as Company;
+    
     const invitationList: Invitation[] = [];
-    const inviteRetryLimit = await getInviteRetryLimit(company.country_code ?? 'fi');
+    const inviteRetryLimit = await getInviteRetryLimit(companyData.country_code ?? 'fi');
     await Promise.all( emailAddresses.map(async (email: string) => {
       const invitationCodeId = admin
         .firestore()
@@ -109,6 +118,7 @@ export const inviteTenants = async (request: Request, response: Response) => {
         apartment_id: apartmentId,
         housing_company_id: companyId,
         claimed_by: null,
+        set_as_apartment_owner: setAsOwner == true && companyManager != null,
         email: email.toLowerCase(),
         email_sent: 1,
         invite_retry_limit: inviteRetryLimit,
@@ -122,7 +132,7 @@ export const inviteTenants = async (request: Request, response: Response) => {
       sendInvitationEmail(
         [email],
         invitationCode,
-        company.name ?? "Housing company",
+        companyData?.name ?? "Housing company",
       );
     }))
    
@@ -157,16 +167,17 @@ export const getInvitationRequest = async (request: Request, response: Response)
   // @ts-ignore
   const userId = request.user?.uid;
   const company = await isCompanyManager(userId, companyId);
-  if (!company) {
+  const apartmentId = request.query.apartment_id?.toString() ?? '';
+  const apartmentOwner = await isApartmentOwner(userId, companyId, apartmentId);
+  if (!company && !apartmentOwner) {
     response.status(403).send({
       errors: {
-        error: "Not manager of housing company",
-        code: "not_manager_of_housing_company",
+        error: "Unauthorized",
+        code: "unauthorized",
       },
     });
     return;
   }
-  const apartmentId = request.query.apartment_id?.toString();
 
   // @ts-ignore
   const status : 'pending'|'accepted'|'expired' = request.query.status?.toString() ?? 'pending';
@@ -192,16 +203,25 @@ export const resendPendingInvitationRequest = async (request: Request, response:
   const invitationId = request.body.invitation_id;
   // @ts-ignore
   const userId = request.user?.uid;
-  const company = await isCompanyManager(userId, companyId);
-  if (!company) {
+  const companyManager = await isCompanyManager(userId, companyId);
+  const invitationData = (await admin.firestore().collection(INVITATION_CODES)
+    .doc(invitationId)
+    .get()).data() as Invitation;
+  const apartmentOwner = await isApartmentOwner(userId, companyId, invitationData.apartment_id);
+  if (!companyManager && !apartmentOwner) {
     response.status(403).send({
       errors: {
-        error: "Not manager of housing company",
-        code: "not_manager_of_housing_company",
+        error: "unauthorized",
+        code: "unauthorized",
       },
     });
     return;
   }
+  const company = companyManager ?? (await admin
+    .firestore()
+    .collection(HOUSING_COMPANIES)
+    .doc(companyId)
+    .get()).data() as Company;
   const invitation = await resendPendingInvitation(invitationId, company);
   if (invitation) {
     response.status(200).send(invitation);
@@ -213,6 +233,62 @@ export const resendPendingInvitationRequest = async (request: Request, response:
       code: "error_resending_invitation",
     },
   })
+}
+
+export const cancelPendingInvitationRequest = async (request: Request, response: Response) => { 
+  const companyId = request.body.housing_company_id;
+  const invitationIds = request.body.invitation_ids as string[] ?? [];
+  // @ts-ignore
+  const userId = request.user?.uid;
+  const cancelledInvitations: Invitation[] = []
+  await Promise.all(invitationIds.map(async (invitationId: string) => {
+    const invitationData =( await admin.firestore().collection(INVITATION_CODES)
+      .doc(invitationId)
+      .get()).data() as Invitation;
+    const apartmentOwner = await isApartmentOwner(userId, companyId, invitationData.apartment_id);
+    const companyManager = await isCompanyManager(userId, companyId);
+    if (companyManager || apartmentOwner) {
+      const invitation = await cancelPendingInvitation(invitationId);
+      if (invitation) {
+        cancelledInvitations.push(invitation);
+      }
+    }
+  }))
+  if (cancelledInvitations.length > 0) {
+    response.status(200).send(cancelledInvitations);
+    return;
+  }
+  response.status(500).send({
+    errors: {
+      error: "Error cancelling invitation",
+      code: "error_cancelling_invitation",
+    },
+  })
+ 
+}
+
+const cancelPendingInvitation = async (invitationId: string): Promise<Invitation|undefined> => {
+  try {
+    const invitation = await admin.firestore().collection(INVITATION_CODES)
+      .doc(invitationId)
+      .get();
+    if (invitation.exists) {
+      const invitationData = invitation.data() as Invitation;
+      if (invitationData.is_valid === 0 || invitationData.claimed_by !== null || invitationData.valid_until < Date.now()) {
+        return invitationData;
+      }
+      await admin.firestore().collection(INVITATION_CODES)
+        .doc(invitationId)
+        .update({
+          is_valid: 0,
+        });
+      return invitationData;
+    }
+    return;
+  } catch (error) {
+    console.log(error);
+    return;
+  }
 }
 
 const resendPendingInvitation = async (invitationId: string, company: Company): Promise<Invitation|undefined> => {

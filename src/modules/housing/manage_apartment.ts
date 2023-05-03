@@ -11,13 +11,17 @@ import {
   HOUSING_COMPANIES,
   HOUSING_COMPANY_ID,
   IS_DELETED,
+  OWNERS,
   TENANTS,
 } from "../../constants";
 import { Apartment } from "../../dto/apartment";
 import { StorageItem } from "../../dto/storage_item";
 import {
+  isAdminRole,
+  isApartmentOwner,
   isAuthorizedAccessToApartment,
   isCompanyManager,
+  removeUserFromApartment,
 } from "../authentication/authentication";
 import {
   copyStorageFolder,
@@ -28,6 +32,10 @@ import {
   getSubscriptionPlanById,
   hasOneActiveSubscription,
 } from "../subscription/subscription-service";
+import { removeCode } from "../authentication/code_validation";
+import { retrieveUsers } from "./manage_housing_company";
+import { FirebaseObject } from "../../dto/firebase_object";
+import { storageItemTranslation } from "../translation/translation_service";
 export const addApartmentRequest = async (
   request: Request,
   response: Response
@@ -80,6 +88,7 @@ export const editApartmentRequest = async (
   const apartmentId = request.body.apartment_id;
   const building = request.body.building;
   const houseCode = request.body.house_code;
+  const owners = request.body.owners;
   const isDeleted = request.body.is_deleted;
   if (!apartmentId) {
     response.status(500).send({
@@ -87,7 +96,12 @@ export const editApartmentRequest = async (
     });
     return;
   }
-  const apartment: Apartment = {};
+  const apartment = (await admin.firestore()
+    .collection(HOUSING_COMPANIES)
+    .doc(housingCompanyId)
+    .collection(APARTMENTS)
+    .doc(apartmentId).get()).data() as Apartment;
+  
   if (building) {
     apartment.building = building;
   }
@@ -96,6 +110,9 @@ export const editApartmentRequest = async (
   }
   if (isDeleted) {
     apartment.is_deleted = isDeleted;
+  }
+  if (owners) {
+    apartment.owners = owners;
   }
   try {
     await admin
@@ -127,20 +144,54 @@ export const editApartmentRequest = async (
   }
 };
 
+export const removeUserFromApartmentRequest = async (request: Request, response: Response) => { 
+  // @ts-ignore
+  const userId = request.user?.uid;
+  const housingCompanyId = request.body.housing_company_id;
+  const apartmentId = request.body.apartment_id;
+  const userToRemove = request.body.removed_user_id;
+  if (!(await isAuthorizedAccessToApartment(userId, housingCompanyId, apartmentId)) && !(await isCompanyManager(userId, housingCompanyId))) {
+    response.status(403).send({
+      errors: { error: "Not authorized", code: "not_authorized" },
+    });
+    return;
+  }
+  try {
+    await removeUserFromApartment(housingCompanyId, apartmentId, userToRemove);
+    response.status(200).send();
+  } catch (errors) {
+    response.status(500).send({
+      errors: errors,
+    });
+  }
+}
+
 export const addTenantToApartment = async (
   userUid: string,
   housingCompanyId: string,
-  apartmentId: string
+  apartmentId: string, 
+  invitationCode: string,
 ) => {
-  if (housingCompanyId && apartmentId) {
+  if (!housingCompanyId || !apartmentId) {
+    return; 
+  }
+  await admin
+  .firestore()
+  .collection(HOUSING_COMPANIES)
+  .doc(housingCompanyId)
+  .collection(APARTMENTS)
+  .doc(apartmentId)
+  .update({ [TENANTS]: firestore.FieldValue.arrayUnion(userUid) });
+  await addHousingCompanyToUser(housingCompanyId, userUid);
+  const invitation = await removeCode(invitationCode, housingCompanyId, userUid);
+  if (invitation?.set_as_apartment_owner == true) {
     await admin
-      .firestore()
-      .collection(HOUSING_COMPANIES)
-      .doc(housingCompanyId)
-      .collection(APARTMENTS)
-      .doc(apartmentId)
-      .update({ [TENANTS]: firestore.FieldValue.arrayUnion(userUid) });
-    await addHousingCompanyToUser(housingCompanyId, userUid);
+    .firestore()
+    .collection(HOUSING_COMPANIES)
+    .doc(housingCompanyId)
+    .collection(APARTMENTS)
+    .doc(apartmentId)
+    .update({ [OWNERS]: firestore.FieldValue.arrayUnion(userUid) });
   }
 };
 
@@ -181,6 +232,7 @@ export const addMultipleApartmentsInBuilding = async (
       building: building,
       house_code: houseCode ?? "",
       tenants: [],
+      owners: [],
       is_deleted: false,
     };
     apartments.push(apartment);
@@ -220,6 +272,7 @@ export const addSingleApartment = async (
     building: building,
     house_code: houseCode ?? "",
     tenants: [],
+    owners: [],
     is_deleted: false,
   };
   await admin
@@ -268,23 +321,6 @@ export const isApartmentTenant = async (
   return apartments.docs.map((doc) => doc.data())[0];
 };
 
-export const isApartmentIdTenant = async (
-  userId: string,
-  housingCompanyId: string,
-  apartmentId: string
-) => {
-  const apartment = await admin
-    .firestore()
-    .collection(HOUSING_COMPANIES)
-    .doc(housingCompanyId)
-    .collection(APARTMENTS)
-    .doc(apartmentId)
-    .get();
-
-  return apartment.data()?.tenants.includes(userId)
-    ? apartment.data()
-    : undefined;
-};
 
 export const getUserApartmentRequest = async (
   request: Request,
@@ -336,7 +372,7 @@ export const getSingleApartmentRequest = async (
 export const getUserApartments = async (
   userId: string,
   housingCompanyId: string
-) => {
+) : Promise<Apartment[]> => {
   if (await isCompanyManager(userId, housingCompanyId)) {
     const apartments = await admin
       .firestore()
@@ -346,7 +382,7 @@ export const getUserApartments = async (
       .orderBy(BUILDING)
       .orderBy(HOUSE_CODE)
       .get();
-    return apartments.docs.map((doc) => doc.data());
+    return apartments.docs.map((doc) => doc.data() as Apartment);
   }
   const apartments = await admin
     .firestore()
@@ -357,7 +393,7 @@ export const getUserApartments = async (
     .orderBy(BUILDING)
     .orderBy(HOUSE_CODE)
     .get();
-  return apartments.docs.map((doc) => doc.data());
+  return apartments.docs.map((doc) => doc.data() as Apartment);
 };
 export const getUserApartment = async (
   userId: string,
@@ -451,11 +487,12 @@ export const addDocumentToApartment = async (
           const storageItem: StorageItem = {
             type: type,
             name: lastPath ?? "",
-            id: id,
+            id,
             is_deleted: false,
             uploaded_by: userId,
             storage_link: newFileLocation,
             created_on: createdOn,
+            summary_translations: null,
           };
           await admin
             .firestore()
@@ -475,6 +512,7 @@ export const addDocumentToApartment = async (
     );
   }
   response.status(200).send(storageItemArray);
+  storageItemTranslation(storageItemArray);
 };
 
 export const getApartmentDocuments = async (
@@ -593,7 +631,7 @@ export const updateAparmentDocument = async (
       .send({ errors: { error: "Unauthorized", code: "not_tenant" } });
     return;
   }
-  const updatedFile: StorageItem = {};
+  const updatedFile: FirebaseObject = {};
   if (request.body?.is_deleted) {
     updatedFile.is_deleted = request.body?.is_deleted;
   }
@@ -683,3 +721,48 @@ export const getApartmentCount = async (companyId: string) => {
   ).data().count;
   return apartmentCount;
 };
+
+
+export const getApartmentTenant= async (companyId: string, apartmentId: string) => {
+  try {
+    const apartment = (
+      await admin
+        .firestore()
+        .collection(HOUSING_COMPANIES).doc(companyId)
+        .collection(APARTMENTS).doc(apartmentId)
+        .get()
+    ).data() as Apartment;
+    const combineUsers = [
+      ...new Set([...(apartment.owners ?? []), ...(apartment.tenants ?? [])]),
+    ];
+    const apartmentTenant = await retrieveUsers(combineUsers);
+  
+    return apartmentTenant;
+  } catch (e) { 
+    console.log(e);
+  }
+  return []
+}
+
+export const getApartmentTenantRequest = async (request: Request, response: Response) => { 
+  // @ts-ignore
+  const userId = request.user?.uid;
+  const companyId = request.query?.housing_company_id;
+  const apartmentId = request.query?.apartment_id;
+  const isTenant = await isApartmentOwner(
+    userId,
+    companyId?.toString() ?? "",
+    apartmentId?.toString() ?? ""
+  );
+  if (!isTenant && !isAdminRole(userId)) {
+    response
+      .status(403)
+      .send({ errors: { error: "Unauthorized", code: "not_tenant" } });
+    return;
+  }
+  const apartmentTenant = await getApartmentTenant(
+    companyId?.toString() ?? "", 
+    apartmentId?.toString() ?? ""
+    );
+  response.status(200).send(apartmentTenant);
+}

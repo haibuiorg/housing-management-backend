@@ -3,7 +3,7 @@ require("dotenv").config();
 import express from "express";
 import bodyParser from "body-parser";
 import admin from "firebase-admin";
-import { getInvitationRequest, inviteTenants, resendPendingInvitationRequest } from "./src/modules/authentication/code_validation";
+import { cancelPendingInvitationRequest, getInvitationRequest, inviteTenants, resendPendingInvitationRequest } from "./src/modules/authentication/code_validation";
 // eslint-disable-next-line max-len
 import {
   addCompanyPaymentProductItemRequest,
@@ -19,6 +19,8 @@ import {
   getHousingCompanies,
   getHousingCompany,
   joinWithCode,
+  removeUserAsCompanyMangerRequest,
+  removeUserFromCompanyRequest,
   setUpPaymentAccountRequest,
   updateCompanyDocument,
   updateHousingCompanyDetail,
@@ -44,8 +46,10 @@ import {
   editApartmentRequest,
   getApartmentDocument,
   getApartmentDocuments,
+  getApartmentTenantRequest,
   getSingleApartmentRequest,
   getUserApartmentRequest,
+  removeUserFromApartmentRequest,
   updateAparmentDocument,
 } from "./src/modules/housing/manage_apartment";
 import {
@@ -227,8 +231,11 @@ router.get(
   validateFirebaseIdToken,
   getHousingCompanies
 );
+router.delete("/housing_company/tenants", validateFirebaseIdToken, removeUserFromCompanyRequest);
+router.post("/housing_company/apartment_tenants", validateFirebaseIdToken, removeUserFromCompanyRequest);
 router.post("/housing_company", validateFirebaseIdToken, createHousingCompany);
 router.post("/housing_company_manager", validateFirebaseIdToken, addNewManager);
+router.delete("/housing_company_manager", validateFirebaseIdToken, removeUserAsCompanyMangerRequest);
 router.get(
   "/housing_company_manager/:companyId",
   validateFirebaseIdToken,
@@ -247,6 +254,8 @@ router.delete("/invoice/:invoiceId", validateFirebaseIdToken, deleteInvoice);
 router.get("/apartments", validateFirebaseIdToken, getUserApartmentRequest);
 router.get("/apartment", validateFirebaseIdToken, getSingleApartmentRequest);
 router.put("/apartment", validateFirebaseIdToken, editApartmentRequest);
+router.delete("/apartment/tenant", validateFirebaseIdToken, removeUserFromApartmentRequest);
+router.get("/apartment/tenants", validateFirebaseIdToken, getApartmentTenantRequest);
 router.post("/apartments", validateFirebaseIdToken, addApartmentRequest);
 router.post("/invoice/:invoiceId", validateFirebaseIdToken, sendInvoiceManually);
 
@@ -256,6 +265,7 @@ router.post("/apartment/join_with_code", validateFirebaseIdToken, joinWithCode);
 router.post("/invitations", validateFirebaseIdToken, inviteTenants);
 router.get("/invitations", validateFirebaseIdToken, getInvitationRequest);
 router.post("/invitations/resend", validateFirebaseIdToken, resendPendingInvitationRequest);
+router.delete("/invitations", validateFirebaseIdToken, cancelPendingInvitationRequest);
 
 router.post("/water_price", validateFirebaseIdToken, addNewWaterPrice);
 router.delete("/water_price", validateFirebaseIdToken, deleteWaterPrice);

@@ -10,4 +10,5 @@ export interface Invitation extends FirebaseObject {
     claimed_by: string | null;
     id: string;
     email_sent: number;
+    set_as_apartment_owner: boolean;
 }

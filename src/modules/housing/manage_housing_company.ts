@@ -1,5 +1,5 @@
 "use strict";
-import { Request, Response } from "express";
+import { Request, Response, request } from "express";
 import admin from "firebase-admin";
 import {
   addMultipleApartmentsInBuilding,
@@ -21,9 +21,13 @@ import {
 } from "../../constants";
 import { Company } from "../../dto/company";
 import {
+  isAdminRole,
   isCompanyManager,
   isCompanyOwner,
   isCompanyTenant,
+  removeUserAsCompanyManger,
+  removeUserAsCompanyOwner,
+  removeUserFromCompany,
 } from "../authentication/authentication";
 import { addHousingCompanyToUser, retrieveUser } from "../user/manage_user";
 import { getCountryData, isValidCountryCode } from "../country/manage_country";
@@ -40,6 +44,8 @@ import { createUserWithEmail } from "../authentication/register";
 import { sendManagerAccountCreatedEmail } from "../email/email_module";
 import { addStripeProductForConnectAccount, createConnectAccount, createConnectAccountLink, retrieveConnectAccount } from "../payment-externals/payment-service";
 import { PaymentProductItem } from "../../dto/payment-product-item";
+import { storageItemTranslation } from "../translation/translation_service";
+import { FirebaseObject } from "../../dto/firebase_object";
 
 export const createHousingCompany = async (
   request: Request,
@@ -424,19 +430,6 @@ export const getCompanyData = async (
   return company;
 };
 
-export const hasApartment = async (
-  apartmentId: string,
-  housingCompanyId: string
-): Promise<boolean> => {
-  const apartment = await admin
-    .firestore()
-    .collection(HOUSING_COMPANIES)
-    .doc(housingCompanyId)
-    .collection(APARTMENTS)
-    .doc(apartmentId)
-    .get();
-  return apartment.exists;
-};
 
 export const getCompanyTenantIds = async (
   housingCompanyId: string,
@@ -591,8 +584,7 @@ export const joinWithCode = async (request: Request, response: Response) => {
   try {
     // @ts-ignore
     const userId = request.user?.uid;
-    await addTenantToApartment(userId, apartment!.housing_company_id!, apartment.id!);
-    await removeCode(invitationCode, apartment.housing_company_id!, userId);
+    await addTenantToApartment(userId, apartment!.housing_company_id!, apartment.id!, invitationCode);
     response.status(200).send(apartment);
   } catch (errors) {
     console.error(errors);
@@ -641,6 +633,7 @@ export const addDocumentToCompany = async (
             uploaded_by: userId,
             storage_link: newFileLocation,
             created_on: createdOn,
+            summary_translations: null
           };
           await admin
             .firestore()
@@ -657,6 +650,7 @@ export const addDocumentToCompany = async (
       })
     );
   }
+  storageItemTranslation(storageItemArray);
   response.status(200).send(storageItemArray);
 };
 
@@ -724,7 +718,7 @@ export const updateCompanyDocument = async (
       .send({ errors: { error: "Unauthorized", code: "not_tenant" } });
     return;
   }
-  const updatedFile: StorageItem = {};
+  const updatedFile: FirebaseObject = {};
   if (request.body?.is_deleted) {
     updatedFile.is_deleted = request.body?.is_deleted;
   }
@@ -1035,6 +1029,67 @@ export const deletePaymentProductItemRequest = async (
       .update({ is_active: false });
     response.sendStatus(200);
   } catch (error) {
+    console.log(error);
     response.sendStatus(500);
   }
 };
+
+export const removeUserAsCompanyMangerRequest = async (request: Request, response: Response) => { 
+  const { removed_user_id, housing_company_id } = request.body;
+  // @ts-ignore
+  const userId = request.user.uid;
+  if (!(await isCompanyOwner(userId, housing_company_id?.toString() ?? ""))) {
+    response.sendStatus(403);
+    return;
+  }
+  try {
+    await admin
+      .firestore()
+      .collection(HOUSING_COMPANIES)
+      .doc(housing_company_id?.toString() ?? "")
+      .update({ managers: admin.firestore.FieldValue.arrayRemove(removed_user_id?.toString() ?? "") });
+    const users = await getCompanyManagerDetails(housing_company_id);
+    response.status(200).send(users);
+  } catch (error) {
+    console.log(error);
+    response.status(500).send({ errors: error });
+  }
+}
+
+export const removeUserFromCompanyRequest = async (request: Request, response: Response) => { 
+  const { removed_user_id, housing_company_id } = request.body;
+  // @ts-ignore
+  const userId = request.user.uid;
+  const companyOwner = await isCompanyOwner(userId, housing_company_id?.toString() ?? "");
+  const isRemovedUserManager = await isCompanyManager(removed_user_id?.toString() ?? "", housing_company_id?.toString() ?? "");
+  const isRemovedUserOwner = await isCompanyOwner(removed_user_id?.toString() ?? "", housing_company_id?.toString() ?? "");
+  const isAdmin = await isAdminRole(userId);
+  if (isRemovedUserOwner && (!companyOwner || isAdmin)) {
+    response.sendStatus(403);
+    return;
+  }
+  if (isRemovedUserManager && !companyOwner) {
+    response.sendStatus(403);
+    return;
+  }
+  const companyManager = await isCompanyOwner(userId, housing_company_id?.toString() ?? "");
+  if (!companyManager) {
+    response.sendStatus(403);
+    return;
+  }
+  if (isRemovedUserOwner) {
+    await removeUserAsCompanyOwner(removed_user_id?.toString() ?? "", housing_company_id?.toString() ?? "");
+  }
+  if (isRemovedUserManager) {
+    await removeUserAsCompanyManger(removed_user_id?.toString() ?? "", housing_company_id?.toString() ?? "");
+  }
+  await removeUserFromCompany(removed_user_id?.toString() ?? "", housing_company_id?.toString() ?? "");
+  try {
+    response.sendStatus(200);
+  } catch (error) {
+    console.log(error);
+    response.status(500).send({ errors: error });
+  }
+}
+
+

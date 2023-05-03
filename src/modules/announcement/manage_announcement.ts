@@ -15,6 +15,7 @@ import {copyStorageFolder, getPublicLinkForFile}
 import {sendEmail} from '../email/email_module';
 import {getCompanyTenantIds} from '../housing/manage_housing_company';
 import { getSubscriptionPlanById, hasOneActiveSubscription } from '../subscription/subscription-service';
+import { getMessageTranslation, storageItemTranslation } from '../translation/translation_service';
 
 export const makeAnnouncement = async (request:Request, response: Response) => {
 	// @ts-ignore
@@ -22,7 +23,7 @@ export const makeAnnouncement = async (request:Request, response: Response) => {
 	const companyId = request.body.housing_company_id?.toString() ?? '';
 	const company = await isCompanyManager(userId, companyId);
 	if (company) {
-		const subscription = await hasOneActiveSubscription(companyId);
+		/*const subscription = await hasOneActiveSubscription(companyId);
 		if (!subscription) {
 			response.status(403).send({
 				errors: {error: 'No active subscription', code: 'no_active_subscription'},
@@ -36,7 +37,7 @@ export const makeAnnouncement = async (request:Request, response: Response) => {
 				errors: {error: 'Max announcement reached', code: 'max_announcement_reached'},
 			});
 			return;
-		}
+		}*/
 		const title = request.body.title?.toString() ?? '';
 		const subtitle = request.body.subtitle?.toString() ?? '';
 		const body = request.body.body?.toString() ?? '';
@@ -60,6 +61,7 @@ export const makeAnnouncement = async (request:Request, response: Response) => {
                     `${HOUSING_COMPANIES}/${companyId}/announcement/${lastPath}`;
 					await copyStorageFolder(link, newFileLocation);
 					const expiration = (Date.now() + 604000);
+					const presigned_url = await getPublicLinkForFile(newFileLocation);
 					const storageItem: StorageItem = {
 						type: 'announcement',
 						name: lastPath ?? '',
@@ -67,9 +69,9 @@ export const makeAnnouncement = async (request:Request, response: Response) => {
 						uploaded_by: userId,
 						storage_link: newFileLocation,
 						created_on: createdOn,
-						presigned_url:
-              await getPublicLinkForFile(newFileLocation, expiration),
+						presigned_url,
 						expired_on: expiration,
+						summary_translations: null,
 					};
 					await admin.firestore().collection(HOUSING_COMPANIES)
 						.doc(companyId)
@@ -84,20 +86,24 @@ export const makeAnnouncement = async (request:Request, response: Response) => {
 			}));
 		}
 		const userDisplayName = await getUserDisplayName(userId, companyId);
+		
 		const announcement : Announcement = {
-			id: id,
-			body: body,
-			title: title,
-			subtitle: subtitle,
+			id,
+			body,
+			title,
+			subtitle,
 			created_by: userId,
 			created_on: new Date().getTime(),
 			display_name: userDisplayName,
 			is_deleted: false,
 			storage_items: storageItemArray,
 		};
+		
 		await admin.firestore().collection(HOUSING_COMPANIES)
 			.doc(companyId).collection(ANNOUNCEMENTS).doc(id).set(announcement);
 		response.status(200).send(announcement);
+		storageItemTranslation(storageItemArray);
+		translateAnnouncement(announcement, companyId);
 		// TODO: create notification channels/topics
 		sendTopicNotification(DEFAULT, {
 			title: title,
@@ -230,27 +236,44 @@ export const editAnnouncement = async (request:Request, response: Response) => {
 			return;
 		}
 		const userDisplayName = await getUserDisplayName(userId, companyId);
+	
 		const announcement : Announcement = {
-			body: body,
-			title: title,
-			subtitle: subtitle,
+			body,
+			title,
+			subtitle,
 			updated_by: userId,
 			display_name: userDisplayName,
 			is_deleted: isDeleted,
 			updated_on: new Date().getTime(),
 		};
+		
 		await admin.firestore().collection(HOUSING_COMPANIES)
 			.doc(companyId).collection(ANNOUNCEMENTS)
 			.doc(announcementId).update(announcement);
 		const announcementUpdated =
-        await getAnnouncement(companyId, announcementId);
+        	await getAnnouncement(companyId, announcementId);
 		response.status(200).send(announcementUpdated);
+		translateAnnouncement(announcement, companyId);
 		return;
 	}
 	response.status(403).send({
 		errors: {error: 'Not Manager', code: 'not_manager'},
 	});
 };
+
+const translateAnnouncement = async (announcement: Announcement, companyId: string) => {
+	const announcementBodyTranslation = await getMessageTranslation((announcement.body ?? "Empty message"), companyId, "announcement", announcement.created_by ?? '', );
+	const announcementTitleTranslation = await getMessageTranslation((announcement.title ?? "Empty title"), companyId, "announcement", announcement.created_by ?? '', );
+	const announcementSubtitleTranslation = await getMessageTranslation((announcement.subtitle ?? "Empty subtitle"), companyId, "announcement", announcement.created_by ?? '', );
+	announcement.translated_body = announcementBodyTranslation;
+	announcement.translated_title = announcementTitleTranslation;
+	announcement.translated_subtitle = announcementSubtitleTranslation;
+	announcement.updated_on = new Date().getTime();
+	await admin.firestore().collection(HOUSING_COMPANIES)
+			.doc(companyId).collection(ANNOUNCEMENTS)
+			.doc(announcement.id!).update(announcement);
+	return announcement;
+}
 
 export const getThisCycleAnnouncementCount = async (companyId: string, ): Promise<number> => {
 	const date = new Date();

@@ -14,6 +14,7 @@ export const COUNTRIES = "countries";
 export const COUNTRY_CODE = "country_code";
 export const LANGUAGE_CODE = "language_code";
 export const TENANTS = "tenants";
+export const OWNERS = "owners";
 export const APARTMENTS = "apartments";
 export const WATER_BILLS = "water_bills";
 export const WATER_CONSUMPTION_MANAGEMENT = "water_consumption_management";
@@ -75,3 +76,5 @@ export const CREDITS = "credits";
 export const LEGAL_DOCUMENTS = 'legal_documents';
 
 export const PRIORLI_PUBLIC_LOGO_URL = 'https://firebasestorage.googleapis.com/v0/b/priorli.appspot.com/o/public%2Flogo%2F3.png?alt=media&token=d0a036b2-5eff-4691-b752-21de74b9ce11'
+
+export const TRANSLATIONS = "translations";

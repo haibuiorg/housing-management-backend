@@ -213,8 +213,8 @@ export const webhookEvents = async (request: Request, response: Response) => {
     event = stripe.webhooks.constructEvent(
       request.body,
       sig,
-      //process.env.PAYMENT_WEBHOOK_SECRET
-      "whsec_c3143b41f66892fc3ffe5be6af11f96e3d07269b4894f131cf12c2f841ace328"
+      process.env.PAYMENT_WEBHOOK_SECRET
+      //"whsec_c3143b41f66892fc3ffe5be6af11f96e3d07269b4894f131cf12c2f841ace328"
     );
   } catch (err) {
     console.log(err);
@@ -264,8 +264,8 @@ export const connectAccountWebhookEvents = async (request: Request, response: Re
     event = stripe.webhooks.constructEvent(
       request.body,
       sig,
-      //process.env.PAYMENT_CONNECT_ACCOUNT_WEBHOOK_SECRET
-      "whsec_c3143b41f66892fc3ffe5be6af11f96e3d07269b4894f131cf12c2f841ace328"
+      process.env.PAYMENT_CONNECT_ACCOUNT_WEBHOOK_SECRET
+      //"whsec_c3143b41f66892fc3ffe5be6af11f96e3d07269b4894f131cf12c2f841ace328"
     );
   } catch (err) {
     console.log(err);

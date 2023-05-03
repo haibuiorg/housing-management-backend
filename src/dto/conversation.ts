@@ -11,4 +11,5 @@ export interface Conversation extends FirebaseObject {
   updated_on?: number;
   status?: "pending" | "ongoing" | "closed";
   last_message_not_seen_by?: string[];
+  apartment_id: string | null;
 }
