@@ -46,3 +46,11 @@ export const hashCode = (data: string): number => {
   }
   return hash;
 };
+
+export const obscureEmail = (email: string) => {
+  const [name, domain] = email.split("@");
+  if (name.length < 3) { 
+    return `***@${domain}`;
+  }
+  return `${name[0]}${new Array(name.length-2).join("*")}${name.substring(name.length-2,name.length)}@${domain}`;
+};

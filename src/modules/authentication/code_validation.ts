@@ -14,6 +14,7 @@ import { isApartmentIdTenant, isApartmentOwner, isCompanyManager } from "./authe
 import { Apartment } from "../../dto/apartment";
 import { Invitation } from "../../dto/invitation";
 import { Company } from "../../dto/company";
+import { obscureEmail } from "../../strings_utils";
 
 const INVITE_RETRY_LIMIT = 3;
 
@@ -296,14 +297,16 @@ const resendPendingInvitation = async (invitationId: string, company: Company): 
     const invitation = await admin.firestore().collection(INVITATION_CODES)
       .doc(invitationId)
       .get();
+    
     if (invitation.exists) {
       const invitationData = invitation.data() as Invitation;
       if (
-        (invitationData.email_sent ?? 1) < (invitationData.invite_retry_limit ?? await(getInviteRetryLimit(company.country_code ?? 'fi')))
+        (invitationData.email_sent ?? 1) > (invitationData.invite_retry_limit ?? await(getInviteRetryLimit(company.country_code ?? 'fi')))
         || invitationData.is_valid === 0 || invitationData.claimed_by !== null || invitationData.valid_until < Date.now()
         ) {
         return;
       }
+     
       await sendInvitationEmail(
         [invitationData.email],
         invitationData.invitation_code,
@@ -312,6 +315,8 @@ const resendPendingInvitation = async (invitationId: string, company: Company): 
       await admin.firestore().collection(INVITATION_CODES).doc(invitationId).update({
         email_sent: firestore.FieldValue.increment(1),
       });
+      invitationData.email_sent = (invitationData.email_sent ?? 0) + 1;
+      invitationData.email = obscureEmail(invitationData.email);
       return invitationData;
     }
   } catch (error) {
@@ -333,7 +338,8 @@ const getExpiredInvitation = async (companyId: string, apartmentId: string| unde
         .where('claimed_by', '==', null)
         .where('valid_until', '<=', Date.now())
         .get();
-    return invitations.docs.map((doc) => doc.data()) as Invitation[];
+    return (invitations.docs.map((doc) => doc.data()) as Invitation[])
+      .map((invitation) => ({...invitation, email: obscureEmail(invitation.email)}));;
   } catch (error) {
     console.log(error);
   } 
@@ -351,26 +357,29 @@ const getAcceptedInvitation = async (companyId: string, apartmentId: string| und
         .where(HOUSING_COMPANY_ID, '==', companyId)
         .where('claimed_by', '!=', null)
         .get();
-    return invitations.docs.map((doc) => doc.data()) as Invitation[];
+    return (invitations.docs.map((doc) => doc.data()) as Invitation[])
+      .map((invitation) => ({...invitation, email: obscureEmail(invitation.email)}));
   } catch (error) {
     console.log(error);
   }
 }
+
 
 const getPendingInvitation = async (companyId: string, apartmentId: string|undefined): Promise<Invitation[]|undefined> => {
   try {
     const invitations = apartmentId ?  await admin.firestore().collection(INVITATION_CODES)
       .where(HOUSING_COMPANY_ID, '==', companyId)
       .where('apartment_id', '==', apartmentId)
-      .where(IS_VALID, '>=', 1)
+      .where(IS_VALID, '==', 1)
       .where('valid_until', '>=',  Date.now())
       .get():
       await admin.firestore().collection(INVITATION_CODES)
       .where(HOUSING_COMPANY_ID, '==', companyId)
-      .where(IS_VALID, '>=', 1)
+      .where(IS_VALID, '==', 1)
       .where('valid_until', '>=',  Date.now())
       .get();
-    return invitations.docs.map((doc) => doc.data()) as Invitation[];
+    return (invitations.docs.map((doc) => doc.data()) as Invitation[])
+      .map((invitation) => ({...invitation, email: obscureEmail(invitation.email)}));;
   } catch (error) {
     console.log(error);
   }
