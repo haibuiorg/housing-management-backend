@@ -1,5 +1,5 @@
-import { Address } from "./address";
-import { FirebaseObject } from "./firebase_object";
+import { Address } from './address';
+import { FirebaseObject } from './firebase_object';
 
 export interface User extends FirebaseObject {
   user_id: string;

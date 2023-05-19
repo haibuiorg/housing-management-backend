@@ -1,4 +1,6 @@
+/* eslint-disable @typescript-eslint/no-var-requires */
 "use strict";
+// eslint-disable-next-line @typescript-eslint/no-var-requires
 require("dotenv").config();
 import express from "express";
 import bodyParser from "body-parser";
@@ -153,7 +155,9 @@ import {
 } from "./src/modules/contact/customer-service";
 import {
   addPaymentProductItem,
+  addStorageLinkReferenceDocument,
   addSubscriptionPlan,
+  createDocumentIndex,
   deletePaymentProductItem,
   deleteSubscriptionPlan,
   getAllCompanies,
@@ -543,8 +547,10 @@ router.put(
   updateContactLeadStatus
 );
 router.get("/admin/companies", validateFirebaseIdToken, getAllCompanies);
-router.post("/admin/payment_product", validateFirebaseIdToken ,addPaymentProductItem);
-router.delete("/admin/payment_product",validateFirebaseIdToken ,deletePaymentProductItem);
+router.post("/admin/add_reference_doc", validateFirebaseIdToken, addStorageLinkReferenceDocument);
+router.post("/admin/add_index", validateFirebaseIdToken, createDocumentIndex);
+router.post("/admin/payment_product", validateFirebaseIdToken, addPaymentProductItem);
+router.delete("/admin/payment_product", validateFirebaseIdToken, deletePaymentProductItem);
 router.get("/payment_products", validateFirebaseIdToken, getPaymentProductItems);
 
 app.get("/", (req, res) => {
@@ -555,4 +561,6 @@ app.use("/api/v1", router);
 
 // Listen to the App Engine-specified port, or 8080 otherwise
 const PORT = process.env.PORT || 8181;
-app.listen(PORT, () => {});
+app.listen(PORT, () => {
+  return;
+});

@@ -1,7 +1,7 @@
-import { Request, Response } from "express";
-import { WaterConsumption } from "../../dto/water_consumption";
-import { getActiveWaterPrice } from "./manage_water_price";
-import admin from "firebase-admin";
+import { Request, Response } from 'express';
+import { WaterConsumption } from '../../dto/water_consumption';
+import { getActiveWaterPrice } from './manage_water_price';
+import admin from 'firebase-admin';
 // eslint-disable-next-line max-len
 import {
   CONSUMPTION_VALUE,
@@ -11,31 +11,23 @@ import {
   PERIOD,
   WATER_CONSUMPTION,
   YEAR,
-} from "../../constants";
-import {
-  getUserApartment,
-  isApartmentTenant,
-} from "../housing/manage_apartment";
-import { ConsumptionValue } from "../../dto/consumption_value";
-import { generateLatestWaterBill } from "./water_bill";
-import { isCompanyManager } from "../authentication/authentication";
-import { Apartment } from "../../dto/apartment";
-import { sendTopicNotification } from "../notification/notification_service";
-import { Company } from "../../dto/company";
-import { getUserDisplayName } from "../user/manage_user";
+} from '../../constants';
+import { getUserApartment, isApartmentTenant } from '../housing/manage_apartment';
+import { ConsumptionValue } from '../../dto/consumption_value';
+import { generateLatestWaterBill } from './water_bill';
+import { isCompanyManager } from '../authentication/authentication';
+import { Apartment } from '../../dto/apartment';
+import { sendTopicNotification } from '../notification/notification_service';
+import { Company } from '../../dto/company';
+import { getUserDisplayName } from '../user/manage_user';
 
-export const startNewWaterConsumptionPeriod = async (
-  request: Request,
-  response: Response
-) => {
+export const startNewWaterConsumptionPeriod = async (request: Request, response: Response) => {
   // @ts-ignore
   const userId = request.user?.uid;
   const companyId = request.body.housing_company_id;
   const totalReading = request.body.total_reading;
   if (!totalReading) {
-    response
-      .status(500)
-      .send({ errors: { error: "Missing value", code: "no_total_reading" } });
+    response.status(500).send({ errors: { error: 'Missing value', code: 'no_total_reading' } });
   }
   const company = await isCompanyManager(userId, companyId);
   if (company as Company) {
@@ -47,10 +39,7 @@ export const startNewWaterConsumptionPeriod = async (
       .collection(WATER_CONSUMPTION)
       .doc().id;
     const currentYear = new Date().getUTCFullYear();
-    const previousPeriod = await getPreviousConsumptionPeriod(
-      companyId,
-      currentYear
-    );
+    const previousPeriod = await getPreviousConsumptionPeriod(companyId, currentYear);
     const waterConsumption: WaterConsumption = {
       year: currentYear,
       basic_fee: activeWaterPrice.basic_fee ?? 0,
@@ -74,23 +63,18 @@ export const startNewWaterConsumptionPeriod = async (
       created_by: userId,
       display_name: distplayName,
       // eslint-disable-next-line max-len
-      body: "New water report period has started, you can now go to your apartment and report new water value",
-      app_route_location: "/" + HOUSING_COMPANY + "/" + companyId,
-      title: "Water consumption",
+      body: 'New water report period has started, you can now go to your apartment and report new water value',
+      app_route_location: '/' + HOUSING_COMPANY + '/' + companyId,
+      title: 'Water consumption',
       color: company?.ui?.seed_color,
     });
     response.status(200).send(waterConsumption);
     return;
   }
-  response
-    .status(403)
-    .send({ errors: { error: "Unauthorized", code: "not_manager" } });
+  response.status(403).send({ errors: { error: 'Unauthorized', code: 'not_manager' } });
 };
 
-export const addConsumptionValue = async (
-  request: Request,
-  response: Response
-) => {
+export const addConsumptionValue = async (request: Request, response: Response) => {
   const waterConsumptionId = request.body.water_consumption_id;
   const housingCompanyId = request.body.housing_company_id;
   const apartmentId = request.body.apartment_id;
@@ -101,30 +85,21 @@ export const addConsumptionValue = async (
   const houseCode = request.body.house_code;
   if (!waterConsumptionId || !housingCompanyId || !consumption || !building) {
     response.status(500).send({
-      errors: { error: "Missing value", code: "missing_required_post_value" },
+      errors: { error: 'Missing value', code: 'missing_required_post_value' },
     });
   }
   let apartment: Apartment;
   if (apartmentId) {
-    apartment = (await getUserApartment(
-      userId,
-      housingCompanyId,
-      apartmentId
-    )) as Apartment;
+    apartment = (await getUserApartment(userId, housingCompanyId, apartmentId)) as Apartment;
   } else {
-    apartment = (await isApartmentTenant(
-      userId,
-      housingCompanyId,
-      building,
-      houseCode
-    )) as Apartment;
+    apartment = (await isApartmentTenant(userId, housingCompanyId, building, houseCode)) as Apartment;
   }
   if (apartment) {
     const consumptionValue: ConsumptionValue = {
       building: building,
       consumption: consumption,
       updated_on: new Date().getTime(),
-      apartment_id: apartment.id ?? "",
+      apartment_id: apartment.id ?? '',
     };
     if (houseCode) {
       consumptionValue.house_code = houseCode;
@@ -137,14 +112,9 @@ export const addConsumptionValue = async (
         .collection(WATER_CONSUMPTION)
         .doc(waterConsumptionId)
         .collection(CONSUMPTION_VALUE)
-        .doc(apartment.id ?? "")
+        .doc(apartment.id ?? '')
         .set(consumptionValue);
-      const waterBill = await generateLatestWaterBill(
-        userId,
-        apartment.id ?? "",
-        housingCompanyId,
-        consumption
-      );
+      const waterBill = await generateLatestWaterBill(userId, apartment.id ?? '', housingCompanyId, consumption);
       response.status(200).send(waterBill);
     } catch (errors) {
       console.log(errors);
@@ -154,32 +124,26 @@ export const addConsumptionValue = async (
   }
   response.status(403).send({
     errors: {
-      error: "Unauthorized",
-      code: "not_tenant",
+      error: 'Unauthorized',
+      code: 'not_tenant',
     },
   });
 };
 
-export const getWholeYearWaterConsumptionRequest = async (
-  request: Request,
-  response: Response
-) => {
+export const getWholeYearWaterConsumptionRequest = async (request: Request, response: Response) => {
   const companyId = request.query.housing_company_id;
   const year = request.query.year ?? new Date().getUTCFullYear();
   if (!companyId) {
     response.status(403).send({
       errors: {
-        error: "Missing value",
-        code: "missing_query_params",
+        error: 'Missing value',
+        code: 'missing_query_params',
       },
     });
     return;
   }
   try {
-    const waterConsumptions = await getWholeYearWaterConsumptions(
-      companyId!.toString(),
-      parseInt(year.toString())
-    );
+    const waterConsumptions = await getWholeYearWaterConsumptions(companyId!.toString(), parseInt(year.toString()));
     response.status(200).send(waterConsumptions);
   } catch (errors) {
     console.log(errors);
@@ -187,41 +151,33 @@ export const getWholeYearWaterConsumptionRequest = async (
   }
 };
 
-const getWholeYearWaterConsumptions = async (
-  companyId: string,
-  year: number
-) => {
+const getWholeYearWaterConsumptions = async (companyId: string, year: number) => {
   const waterConsumption = (
     await admin
       .firestore()
       .collection(HOUSING_COMPANIES)
       .doc(companyId)
       .collection(WATER_CONSUMPTION)
-      .where(YEAR, "==", year)
-      .orderBy(PERIOD, "asc")
+      .where(YEAR, '==', year)
+      .orderBy(PERIOD, 'asc')
       .get()
   ).docs.map((doc) => doc.data());
   return waterConsumption;
 };
 
-export const getLatestWaterConsumptionRequest = async (
-  request: Request,
-  response: Response
-) => {
+export const getLatestWaterConsumptionRequest = async (request: Request, response: Response) => {
   const companyId = request.query.housing_company_id;
   if (!companyId) {
     response.status(403).send({
       errors: {
-        error: "Missing value",
-        code: "missing_query_params",
+        error: 'Missing value',
+        code: 'missing_query_params',
       },
     });
     return;
   }
   try {
-    const waterConsumption = await getLatestWaterConsumption(
-      companyId!.toString()
-    );
+    const waterConsumption = await getLatestWaterConsumption(companyId!.toString());
     response.status(200).send(waterConsumption ?? {});
   } catch (errors) {
     console.log(errors);
@@ -237,39 +193,31 @@ export const getLatestWaterConsumption = async (companyId: string) => {
       .collection(HOUSING_COMPANIES)
       .doc(companyId)
       .collection(WATER_CONSUMPTION)
-      .where(YEAR, "==", year)
-      .orderBy(PERIOD, "desc")
+      .where(YEAR, '==', year)
+      .orderBy(PERIOD, 'desc')
       .limit(1)
       .get()
   ).docs.map((doc) => doc.data())[0];
   if (waterConsumption) {
-    const consumptionValues = await getAllConsumptionValue(
-      companyId,
-      waterConsumption.id
-    );
+    const consumptionValues = await getAllConsumptionValue(companyId, waterConsumption.id);
     waterConsumption.consumption_values = consumptionValues;
   }
   return waterConsumption;
 };
 
-export const getPreviousWaterConsumptionRequest = async (
-  request: Request,
-  response: Response
-) => {
+export const getPreviousWaterConsumptionRequest = async (request: Request, response: Response) => {
   const companyId = request.query.housing_company_id;
   if (!companyId) {
     response.status(403).send({
       errors: {
-        error: "Missing value",
-        code: "missing_query_params",
+        error: 'Missing value',
+        code: 'missing_query_params',
       },
     });
     return;
   }
   try {
-    const waterConsumption = await getPreviousWaterConsumption(
-      companyId!.toString()
-    );
+    const waterConsumption = await getPreviousWaterConsumption(companyId!.toString());
     response.status(200).send(waterConsumption);
   } catch (errors) {
     console.log(errors);
@@ -288,41 +236,34 @@ export const getPreviousWaterConsumptionAfterAddNew = async (companyId: string) 
         .collection(HOUSING_COMPANIES)
         .doc(companyId)
         .collection(WATER_CONSUMPTION)
-        .where(YEAR, "==", year)
-        .orderBy(PERIOD, "desc")
+        .where(YEAR, '==', year)
+        .orderBy(PERIOD, 'desc')
         .limit(1)
         .get()
     ).docs.map((doc) => doc.data())[0];
     if (waterConsumption) {
-      const consumptionValues = await getAllConsumptionValue(
-        companyId,
-        waterConsumption.id
-      );
+      const consumptionValues = await getAllConsumptionValue(companyId, waterConsumption.id);
       waterConsumption.consumption_values = consumptionValues;
     }
     return waterConsumption;
   }
-  console.log("previousPeriod", previousPeriod)
+  console.log('previousPeriod', previousPeriod);
   const waterConsumption = (
     await admin
       .firestore()
       .collection(HOUSING_COMPANIES)
       .doc(companyId)
       .collection(WATER_CONSUMPTION)
-      .where(YEAR, "==", year)
-      .where(PERIOD, "==", previousPeriod - 1)
+      .where(YEAR, '==', year)
+      .where(PERIOD, '==', previousPeriod - 1)
       .limit(1)
       .get()
   ).docs.map((doc) => doc.data())[0];
   if (waterConsumption) {
-    const consumptionValues = await getAllConsumptionValue(
-      companyId,
-      waterConsumption.id
-    );
+    const consumptionValues = await getAllConsumptionValue(companyId, waterConsumption.id);
     waterConsumption.consumption_values = consumptionValues;
   }
   return waterConsumption;
-  
 };
 
 export const getPreviousWaterConsumption = async (companyId: string) => {
@@ -337,33 +278,27 @@ export const getPreviousWaterConsumption = async (companyId: string) => {
       .collection(HOUSING_COMPANIES)
       .doc(companyId)
       .collection(WATER_CONSUMPTION)
-      .where(YEAR, "==", year)
-      .orderBy(PERIOD, "desc")
+      .where(YEAR, '==', year)
+      .orderBy(PERIOD, 'desc')
       .limit(1)
       .get()
   ).docs.map((doc) => doc.data())[0];
   if (waterConsumption) {
-    const consumptionValues = await getAllConsumptionValue(
-      companyId,
-      waterConsumption.id
-    );
+    const consumptionValues = await getAllConsumptionValue(companyId, waterConsumption.id);
     waterConsumption.consumption_values = consumptionValues;
   }
   return waterConsumption;
 };
 
-export const getWaterConsumptionRequest = async (
-  request: Request,
-  response: Response
-) => {
+export const getWaterConsumptionRequest = async (request: Request, response: Response) => {
   const companyId = request.query.housing_company_id;
   const period = request.query.period;
   const year = request.query.year;
   if (!companyId || !period || !year) {
     response.status(403).send({
       errors: {
-        error: "Missing value",
-        code: "missing_query_params",
+        error: 'Missing value',
+        code: 'missing_query_params',
       },
     });
     return;
@@ -372,7 +307,7 @@ export const getWaterConsumptionRequest = async (
     const waterConsumption = await getWaterConsumption(
       companyId!.toString(),
       parseInt(period.toString()),
-      parseInt(year.toString())
+      parseInt(year.toString()),
     );
     response.status(200).send(waterConsumption);
   } catch (errors) {
@@ -381,35 +316,25 @@ export const getWaterConsumptionRequest = async (
   }
 };
 
-export const getWaterConsumption = async (
-  companyId: string,
-  period: number,
-  year: number
-) => {
+export const getWaterConsumption = async (companyId: string, period: number, year: number) => {
   const waterConsumption = (
     await admin
       .firestore()
       .collection(HOUSING_COMPANIES)
       .doc(companyId)
       .collection(WATER_CONSUMPTION)
-      .where(YEAR, "==", year)
-      .where(PERIOD, "==", period)
+      .where(YEAR, '==', year)
+      .where(PERIOD, '==', period)
       .limit(1)
       .get()
   ).docs.map((doc) => doc.data())[0];
-  const consumptionValues = await getAllConsumptionValue(
-    companyId,
-    waterConsumption.id
-  );
+  const consumptionValues = await getAllConsumptionValue(companyId, waterConsumption.id);
   waterConsumption.consumption_values = consumptionValues;
   return waterConsumption;
 };
 
 // TODO: improve this to reduce cost if needed
-const getAllConsumptionValue = async (
-  companyId: string,
-  waterConsumptionId: string
-) => {
+const getAllConsumptionValue = async (companyId: string, waterConsumptionId: string) => {
   const waterConsumptionValues = await admin
     .firestore()
     .collection(HOUSING_COMPANIES)
@@ -423,23 +348,20 @@ const getAllConsumptionValue = async (
     waterConsumptionValues.map(async (value) => {
       const data = (await value.get()).data();
       result.push(data);
-    })
+    }),
   );
   return result;
 };
 
-const getPreviousConsumptionPeriod = async (
-  companyId: string,
-  year: number
-): Promise<number> => {
+const getPreviousConsumptionPeriod = async (companyId: string, year: number): Promise<number> => {
   const previousPeriod = (
     await admin
       .firestore()
       .collection(HOUSING_COMPANIES)
       .doc(companyId)
       .collection(WATER_CONSUMPTION)
-      .where(YEAR, "==", year)
-      .orderBy(PERIOD, "desc")
+      .where(YEAR, '==', year)
+      .orderBy(PERIOD, 'desc')
       .limit(1)
       .get()
   ).docs.map((doc) => doc.data());

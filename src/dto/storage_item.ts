@@ -1,5 +1,5 @@
-import { FirebaseObject } from "./firebase_object";
-import { Translation } from "./translation";
+import { FirebaseObject } from './firebase_object';
+import { Translation } from './translation';
 
 export interface StorageItem extends FirebaseObject {
   id?: string;

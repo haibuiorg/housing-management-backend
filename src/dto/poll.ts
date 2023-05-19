@@ -1,9 +1,9 @@
-import { FirebaseObject } from "./firebase_object";
+import { FirebaseObject } from './firebase_object';
 
 export interface Poll extends FirebaseObject {
   id: string;
   name: string;
-  type: "generic" | "company_internal" | "company" | "message";
+  type: 'generic' | 'company_internal' | 'company' | 'message';
   description: string;
   expandable: boolean;
   annonymous: boolean;

@@ -1,14 +1,11 @@
 /* eslint-disable camelcase */
-import { Request, Response } from "express";
-import admin from "firebase-admin";
-import { CONTACT_LEADS, CONTACT_LEADS_STATUS_NEW } from "../../constants";
-import { isValidEmail } from "../../strings_utils";
+import { Request, Response } from 'express';
+import admin from 'firebase-admin';
+import { CONTACT_LEADS, CONTACT_LEADS_STATUS_NEW } from '../../constants';
+import { isValidEmail } from '../../strings_utils';
 
-export const submitContactForm = async (
-  request: Request,
-  response: Response
-) => {
-  const { name, email, message, phone = "", book_demo } = request.body;
+export const submitContactForm = async (request: Request, response: Response) => {
+  const { name, email, message, phone = '', book_demo } = request.body;
   if (
     !name ||
     !email ||
@@ -21,11 +18,11 @@ export const submitContactForm = async (
     message.length > 1000 ||
     !isValidEmail(email)
   ) {
-    response.status(400).send({ error: "Bad Request" });
+    response.status(400).send({ error: 'Bad Request' });
     return;
   }
   const id = admin.firestore().collection(CONTACT_LEADS).doc().id;
-  const type = book_demo ? "demo_form" : "contact_form";
+  const type = book_demo ? 'demo_form' : 'contact_form';
   const created_on = Date.now();
   const status = CONTACT_LEADS_STATUS_NEW;
   const contactLead = {
@@ -43,13 +40,13 @@ export const submitContactForm = async (
 };
 
 export const submitOfferForm = async (request: Request, response: Response) => {
-  const { email, phone = "" } = request.body;
+  const { email, phone = '' } = request.body;
   if (!email || !email.trim() || email.length > 100 || !isValidEmail(email)) {
-    response.status(400).send({ error: "Bad Request" });
+    response.status(400).send({ error: 'Bad Request' });
     return;
   }
   const id = admin.firestore().collection(CONTACT_LEADS).doc().id;
-  const type = "offer_form";
+  const type = 'offer_form';
   // eslint-disable-next-line camelcase
   const created_on = Date.now();
   const status = CONTACT_LEADS_STATUS_NEW;

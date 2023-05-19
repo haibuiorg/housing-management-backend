@@ -1,4 +1,4 @@
-import { FirebaseObject } from "./firebase_object";
+import { FirebaseObject } from './firebase_object';
 
 export interface Address extends FirebaseObject {
   street_address_1?: string;

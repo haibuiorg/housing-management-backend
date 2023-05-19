@@ -1,4 +1,4 @@
-"use strict";
+'use strict';
 
 /**
  * Check if email is valid.
@@ -23,12 +23,12 @@ export function isValidEmail(email: string): boolean {
   }
 
   // Further checking of some things regex can't handle
-  const parts = email.split("@");
+  const parts = email.split('@');
   if (parts[0].length > 64) {
     return false;
   }
 
-  const domainParts = parts[1].split(".");
+  const domainParts = parts[1].split('.');
   return !domainParts.some((part) => {
     return part.length > 63;
   });
@@ -48,9 +48,9 @@ export const hashCode = (data: string): number => {
 };
 
 export const obscureEmail = (email: string) => {
-  const [name, domain] = email.split("@");
-  if (name.length < 3) { 
+  const [name, domain] = email.split('@');
+  if (name.length < 3) {
     return `***@${domain}`;
   }
-  return `${name[0]}${new Array(name.length-2).join("*")}${name.substring(name.length-2,name.length)}@${domain}`;
+  return `${name[0]}${new Array(name.length - 2).join('*')}${name.substring(name.length - 2, name.length)}@${domain}`;
 };

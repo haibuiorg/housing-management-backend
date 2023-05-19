@@ -1,4 +1,4 @@
-import Joi from "joi";
+import Joi from 'joi';
 
 const createInvoiceSchema = Joi.object({
   company_id: Joi.string(),

@@ -1,5 +1,5 @@
-import { FirebaseObject } from "./firebase_object";
-import { StorageItem } from "./storage_item";
+import { FirebaseObject } from './firebase_object';
+import { StorageItem } from './storage_item';
 
 export interface Message extends FirebaseObject {
   created_on: number;

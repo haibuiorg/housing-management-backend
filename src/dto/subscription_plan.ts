@@ -1,4 +1,4 @@
-import { FirebaseObject } from "./firebase_object";
+import { FirebaseObject } from './firebase_object';
 
 export interface SubscriptionPlan extends FirebaseObject {
   id: string;
@@ -13,7 +13,7 @@ export interface SubscriptionPlan extends FirebaseObject {
   max_messaging_channels: number;
   max_invoice_number: number;
   additional_invoice_cost: number;
-  interval: "month" | "day";
+  interval: 'month' | 'day';
   interval_count: number;
   country_code: string;
   max_announcement: number;

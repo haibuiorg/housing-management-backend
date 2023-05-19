@@ -1,42 +1,28 @@
-import { Request, Response } from "express";
-import admin from "firebase-admin";
-import { isAuthorizedAccessToApartment } from "../authentication/authentication";
+import { Request, Response } from 'express';
+import admin from 'firebase-admin';
+import { isAuthorizedAccessToApartment } from '../authentication/authentication';
 // eslint-disable-next-line max-len
-import {
-  APP_COLOR,
-  CONVERSATIONS,
-  FAULT_REPORT_MESSAGE_TYPE,
-  HOUSING_COMPANIES,
-  MESSAGES,
-} from "../../constants";
+import { APP_COLOR, CONVERSATIONS, FAULT_REPORT_MESSAGE_TYPE, HOUSING_COMPANIES, MESSAGES } from '../../constants';
 
-import { retrieveUser } from "../user/manage_user";
-import { Conversation } from "../../dto/conversation";
-import { StorageItem } from "../../dto/storage_item";
-import { sendNotificationToUsers } from "../notification/notification_service";
-import { copyStorageFolder } from "../storage/manage_storage";
-import { Message } from "../../dto/message";
-import {
-  getCompanyData,
-  getCompanyManagerDetails,
-} from "../housing/manage_housing_company";
-import { User } from "../../dto/user";
-import { sendFaultReportEmail } from "../email/email_module";
-import { storageItemTranslation } from "../translation/translation_service";
+import { retrieveUser } from '../user/manage_user';
+import { Conversation } from '../../dto/conversation';
+import { StorageItem } from '../../dto/storage_item';
+import { sendNotificationToUsers } from '../notification/notification_service';
+import { copyStorageFolder } from '../storage/manage_storage';
+import { Message } from '../../dto/message';
+import { getCompanyData, getCompanyManagerDetails } from '../housing/manage_housing_company';
+import { User } from '../../dto/user';
+import { sendFaultReportEmail } from '../email/email_module';
+import { storageItemTranslation } from '../translation/translation_service';
 
-export const createFaultReport = async (
-  request: Request,
-  response: Response
-) => {
+export const createFaultReport = async (request: Request, response: Response) => {
   // @ts-ignore
   const senderId = request.user?.uid;
   const companyId = request.params.companyId;
   const apartmentId = request.params.apartmentId;
-  if (
-    !(await isAuthorizedAccessToApartment(senderId, companyId, apartmentId))
-  ) {
+  if (!(await isAuthorizedAccessToApartment(senderId, companyId, apartmentId))) {
     response.status(403).send({
-      errors: "no_permission",
+      errors: 'no_permission',
     });
     return;
   }
@@ -53,9 +39,7 @@ export const createFaultReport = async (
     .doc(companyId)
     .collection(CONVERSATIONS)
     .doc().id;
-  const userIdList: string[] = [
-    ...new Set([...([senderId] ?? []), ...(companyMangerIds ?? [])]),
-  ];
+  const userIdList: string[] = [...new Set([...([senderId] ?? []), ...(companyMangerIds ?? [])])];
   const createdOn = new Date().getTime();
   const conversation: Conversation = {
     id: conversationId,
@@ -64,7 +48,7 @@ export const createFaultReport = async (
     type: FAULT_REPORT_MESSAGE_TYPE,
     created_on: createdOn,
     updated_on: createdOn,
-    status: "pending",
+    status: 'pending',
     user_ids: userIdList,
     apartment_id: apartmentId,
   };
@@ -76,7 +60,7 @@ export const createFaultReport = async (
     .doc(conversationId)
     .set(conversation);
   const user = (await retrieveUser(senderId)) as User;
-  const senderName = user.first_name + " " + user.last_name;
+  const senderName = user.first_name + ' ' + user.last_name;
   const messageId = admin
     .firestore()
     .collection(mainPath)
@@ -104,21 +88,20 @@ export const createFaultReport = async (
     await Promise.all(
       storageItems.map(async (link: string) => {
         try {
-          const lastPath = link.toString().split("/").at(-1);
+          const lastPath = link.toString().split('/').at(-1);
           const newFileLocation = `conversations/${conversationId}/${lastPath}`;
           await copyStorageFolder(link, newFileLocation);
           storageItemArray.push({
             storage_link: newFileLocation,
-            name: lastPath ?? "",
+            name: lastPath ?? '',
             summary_translations: null,
           });
         } catch (error) {
           console.log(error);
         }
-      })
+      }),
     );
     messageData.storage_items = storageItemArray;
-    
   }
 
   try {
@@ -134,22 +117,14 @@ export const createFaultReport = async (
 
     if (conversation) {
       const userIds = (conversation as Conversation).user_ids;
-      const sendNotificationUserList = userIds?.filter(
-        (item) => item !== senderId
-      );
+      const sendNotificationUserList = userIds?.filter((item) => item !== senderId);
       if (sendNotificationUserList && sendNotificationUserList.length > 0) {
         const companyData = await getCompanyData(companyId);
         sendNotificationToUsers(sendNotificationUserList, {
           title: conversation.name,
           body: message,
           color: companyData?.ui?.seed_color ?? APP_COLOR,
-          app_route_location:
-            "/message/" +
-            conversation.type +
-            "/" +
-            conversation.channel_id +
-            "/" +
-            conversation.id,
+          app_route_location: '/message/' + conversation.type + '/' + conversation.channel_id + '/' + conversation.id,
         });
       }
       await admin
@@ -171,7 +146,7 @@ export const createFaultReport = async (
         senderName,
         title,
         description,
-        storageItemArray.map((it) => it.storage_link ?? "")
+        storageItemArray.map((it) => it.storage_link ?? ''),
       );
     }
     response.status(200).send(conversation);
@@ -181,22 +156,10 @@ export const createFaultReport = async (
   }
 };
 
-export const getFaultReports = async (
-  request: Request,
-  response: Response
-) => {};
+//export const getFaultReports = async (request: Request, response: Response) => {};
 
-export const getFaultReport = async (
-  request: Request,
-  response: Response
-) => {};
+//export const getFaultReport = async (request: Request, response: Response) => {};
 
-export const editFaultReport = async (
-  request: Request,
-  response: Response
-) => {};
+//export const editFaultReport = async (request: Request, response: Response) => {};
 
-export const deleteFaultReport = async (
-  request: Request,
-  response: Response
-) => {};
+//export const deleteFaultReport = async (request: Request, response: Response) => {};

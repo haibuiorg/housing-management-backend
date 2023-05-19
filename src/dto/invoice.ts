@@ -1,5 +1,5 @@
-import { FirebaseObject } from "./firebase_object";
-import { PaymentProductItem } from "./payment-product-item";
+import { FirebaseObject } from './firebase_object';
+import { PaymentProductItem } from './payment-product-item';
 
 export interface Invoice extends FirebaseObject {
   id: string;
@@ -18,11 +18,11 @@ export interface Invoice extends FirebaseObject {
   is_deleted: boolean;
   created_on: number;
   company_id: string;
-  status: "paid" | "pending";
+  status: 'paid' | 'pending';
   currency_code: string;
   additional_invoice_links: string[];
   bank_account_id: string;
-  updated_on: number|null;
+  updated_on: number | null;
 }
 
 export interface InvoiceGroup extends FirebaseObject {

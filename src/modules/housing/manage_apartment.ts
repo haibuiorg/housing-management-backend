@@ -1,5 +1,5 @@
-import { Request, Response } from "express";
-import admin, { firestore } from "firebase-admin";
+import { Request, Response } from 'express';
+import admin, { firestore } from 'firebase-admin';
 // eslint-disable-next-line max-len
 import {
   APARTMENTS,
@@ -13,39 +13,30 @@ import {
   IS_DELETED,
   OWNERS,
   TENANTS,
-} from "../../constants";
-import { Apartment } from "../../dto/apartment";
-import { StorageItem } from "../../dto/storage_item";
+} from '../../constants';
+import { Apartment } from '../../dto/apartment';
+import { StorageItem } from '../../dto/storage_item';
 import {
   isAdminRole,
   isApartmentOwner,
   isAuthorizedAccessToApartment,
   isCompanyManager,
   removeUserFromApartment,
-} from "../authentication/authentication";
-import {
-  copyStorageFolder,
-  getPublicLinkForFile,
-} from "../storage/manage_storage";
-import { addHousingCompanyToUser } from "../user/manage_user";
-import {
-  getSubscriptionPlanById,
-  hasOneActiveSubscription,
-} from "../subscription/subscription-service";
-import { removeCode } from "../authentication/code_validation";
-import { retrieveUsers } from "./manage_housing_company";
-import { FirebaseObject } from "../../dto/firebase_object";
-import { storageItemTranslation } from "../translation/translation_service";
-export const addApartmentRequest = async (
-  request: Request,
-  response: Response
-) => {
+} from '../authentication/authentication';
+import { copyStorageFolder, getPublicLinkForFile } from '../storage/manage_storage';
+import { addHousingCompanyToUser } from '../user/manage_user';
+import { getSubscriptionPlanById, hasOneActiveSubscription } from '../subscription/subscription-service';
+import { removeCode } from '../authentication/code_validation';
+import { retrieveUsers } from './manage_housing_company';
+import { FirebaseObject } from '../../dto/firebase_object';
+import { storageItemTranslation } from '../translation/translation_service';
+export const addApartmentRequest = async (request: Request, response: Response) => {
   // @ts-ignore
   const userId = request.user?.uid;
   const housingCompanyId = request.body.housing_company_id;
   if (!(await isCompanyManager(userId, housingCompanyId))) {
     response.status(403).send({
-      errors: { error: "Not manager", code: "not_manager" },
+      errors: { error: 'Not manager', code: 'not_manager' },
     });
     return;
   }
@@ -53,16 +44,12 @@ export const addApartmentRequest = async (
   const houseCodes = request.body.house_codes;
   if (!building) {
     response.status(500).send({
-      errors: { error: "Building require", code: "missing_buiding" },
+      errors: { error: 'Building require', code: 'missing_buiding' },
     });
     return;
   }
   try {
-    const apartments = await addMultipleApartmentsInBuilding(
-      housingCompanyId,
-      building,
-      houseCodes
-    );
+    const apartments = await addMultipleApartmentsInBuilding(housingCompanyId, building, houseCodes);
     response.status(200).send(apartments);
   } catch (errors) {
     response.status(500).send({
@@ -71,17 +58,14 @@ export const addApartmentRequest = async (
   }
 };
 
-export const editApartmentRequest = async (
-  request: Request,
-  response: Response
-) => {
+export const editApartmentRequest = async (request: Request, response: Response) => {
   // @ts-ignore
   const userId = request.user?.uid;
   const housingCompanyId = request.body.housing_company_id;
   const isCompanyManagerBool = await isCompanyManager(userId, housingCompanyId);
   if (!isCompanyManagerBool) {
     response.status(403).send({
-      errors: { error: "Not manager", code: "not_manager" },
+      errors: { error: 'Not manager', code: 'not_manager' },
     });
     return;
   }
@@ -92,16 +76,20 @@ export const editApartmentRequest = async (
   const isDeleted = request.body.is_deleted;
   if (!apartmentId) {
     response.status(500).send({
-      errors: { error: "apartment_id require", code: "missing_apartment_id" },
+      errors: { error: 'apartment_id require', code: 'missing_apartment_id' },
     });
     return;
   }
-  const apartment = (await admin.firestore()
-    .collection(HOUSING_COMPANIES)
-    .doc(housingCompanyId)
-    .collection(APARTMENTS)
-    .doc(apartmentId).get()).data() as Apartment;
-  
+  const apartment = (
+    await admin
+      .firestore()
+      .collection(HOUSING_COMPANIES)
+      .doc(housingCompanyId)
+      .collection(APARTMENTS)
+      .doc(apartmentId)
+      .get()
+  ).data() as Apartment;
+
   if (building) {
     apartment.building = building;
   }
@@ -144,15 +132,18 @@ export const editApartmentRequest = async (
   }
 };
 
-export const removeUserFromApartmentRequest = async (request: Request, response: Response) => { 
+export const removeUserFromApartmentRequest = async (request: Request, response: Response) => {
   // @ts-ignore
   const userId = request.user?.uid;
   const housingCompanyId = request.body.housing_company_id;
   const apartmentId = request.body.apartment_id;
   const userToRemove = request.body.removed_user_id;
-  if (!(await isAuthorizedAccessToApartment(userId, housingCompanyId, apartmentId)) && !(await isCompanyManager(userId, housingCompanyId))) {
+  if (
+    !(await isAuthorizedAccessToApartment(userId, housingCompanyId, apartmentId)) &&
+    !(await isCompanyManager(userId, housingCompanyId))
+  ) {
     response.status(403).send({
-      errors: { error: "Not authorized", code: "not_authorized" },
+      errors: { error: 'Not authorized', code: 'not_authorized' },
     });
     return;
   }
@@ -164,53 +155,49 @@ export const removeUserFromApartmentRequest = async (request: Request, response:
       errors: errors,
     });
   }
-}
+};
 
 export const addTenantToApartment = async (
   userUid: string,
   housingCompanyId: string,
-  apartmentId: string, 
+  apartmentId: string,
   invitationCode: string,
 ) => {
   if (!housingCompanyId || !apartmentId) {
-    return; 
+    return;
   }
   await admin
-  .firestore()
-  .collection(HOUSING_COMPANIES)
-  .doc(housingCompanyId)
-  .collection(APARTMENTS)
-  .doc(apartmentId)
-  .update({ [TENANTS]: firestore.FieldValue.arrayUnion(userUid) });
-  await addHousingCompanyToUser(housingCompanyId, userUid);
-  const invitation = await removeCode(invitationCode, housingCompanyId, userUid);
-  if (invitation?.set_as_apartment_owner == true) {
-    await admin
     .firestore()
     .collection(HOUSING_COMPANIES)
     .doc(housingCompanyId)
     .collection(APARTMENTS)
     .doc(apartmentId)
-    .update({ [OWNERS]: firestore.FieldValue.arrayUnion(userUid) });
+    .update({ [TENANTS]: firestore.FieldValue.arrayUnion(userUid) });
+  await addHousingCompanyToUser(housingCompanyId, userUid);
+  const invitation = await removeCode(invitationCode, housingCompanyId, userUid);
+  if (invitation?.set_as_apartment_owner == true) {
+    await admin
+      .firestore()
+      .collection(HOUSING_COMPANIES)
+      .doc(housingCompanyId)
+      .collection(APARTMENTS)
+      .doc(apartmentId)
+      .update({ [OWNERS]: firestore.FieldValue.arrayUnion(userUid) });
   }
 };
 
 export const addMultipleApartmentsInBuilding = async (
   housingCompanyId: string,
   building: string,
-  houseCodes?: string[]
+  houseCodes?: string[],
 ) => {
   const newApartmentCount = houseCodes ? houseCodes.length : 1;
   const companyPartmentCount = await getApartmentCount(housingCompanyId);
   const activeSubscription = await hasOneActiveSubscription(housingCompanyId);
-  if (
-    !activeSubscription ||
-    (activeSubscription.quantity ?? 0) <
-      companyPartmentCount + newApartmentCount
-  ) {
+  if (!activeSubscription || (activeSubscription.quantity ?? 0) < companyPartmentCount + newApartmentCount) {
     throw {
-      error: "Subscription plan does not allow more apartments",
-      code: "subscription_plan_does_not_allow_more_apartments",
+      error: 'Subscription plan does not allow more apartments',
+      code: 'subscription_plan_does_not_allow_more_apartments',
     };
   }
 
@@ -230,7 +217,7 @@ export const addMultipleApartmentsInBuilding = async (
       housing_company_id: housingCompanyId,
       id: apartmentId,
       building: building,
-      house_code: houseCode ?? "",
+      house_code: houseCode ?? '',
       tenants: [],
       owners: [],
       is_deleted: false,
@@ -255,11 +242,7 @@ export const addMultipleApartmentsInBuilding = async (
   return apartments;
 };
 
-export const addSingleApartment = async (
-  housingCompanyId: string,
-  building: string,
-  houseCode?: string
-) => {
+export const addSingleApartment = async (housingCompanyId: string, building: string, houseCode?: string) => {
   const apartmentId = admin
     .firestore()
     .collection(HOUSING_COMPANIES)
@@ -270,7 +253,7 @@ export const addSingleApartment = async (
     housing_company_id: housingCompanyId,
     id: apartmentId,
     building: building,
-    house_code: houseCode ?? "",
+    house_code: houseCode ?? '',
     tenants: [],
     owners: [],
     is_deleted: false,
@@ -296,15 +279,15 @@ export const isApartmentTenant = async (
   userId: string,
   housingCompanyId: string,
   building: string,
-  houseCode?: string
+  houseCode?: string,
 ) => {
   if (!houseCode) {
     const apartments = await admin
       .firestore()
       .collectionGroup(APARTMENTS)
-      .where(HOUSING_COMPANY_ID, "==", housingCompanyId)
-      .where(BUILDING, "==", building)
-      .where(TENANTS, "array-contains", userId)
+      .where(HOUSING_COMPANY_ID, '==', housingCompanyId)
+      .where(BUILDING, '==', building)
+      .where(TENANTS, 'array-contains', userId)
       .limit(1)
       .get();
     return apartments.docs.map((doc) => doc.data())[0];
@@ -312,73 +295,52 @@ export const isApartmentTenant = async (
   const apartments = await admin
     .firestore()
     .collectionGroup(APARTMENTS)
-    .where(HOUSING_COMPANY_ID, "==", housingCompanyId)
-    .where(BUILDING, "==", building)
-    .where(HOUSE_CODE, "==", houseCode)
-    .where(TENANTS, "array-contains", userId)
+    .where(HOUSING_COMPANY_ID, '==', housingCompanyId)
+    .where(BUILDING, '==', building)
+    .where(HOUSE_CODE, '==', houseCode)
+    .where(TENANTS, 'array-contains', userId)
     .limit(1)
     .get();
   return apartments.docs.map((doc) => doc.data())[0];
 };
 
-
-export const getUserApartmentRequest = async (
-  request: Request,
-  response: Response
-) => {
+export const getUserApartmentRequest = async (request: Request, response: Response) => {
   // @ts-ignore
   const userId = request.user?.uid;
   const housingCompanyId = request.query.housing_company_id;
   if (!housingCompanyId) {
-    response
-      .status(500)
-      .send({ errors: { error: "Missing value", code: "missing_company_id" } });
+    response.status(500).send({ errors: { error: 'Missing value', code: 'missing_company_id' } });
   }
   try {
-    const apartments = await getUserApartments(
-      userId,
-      housingCompanyId!.toString()
-    );
+    const apartments = await getUserApartments(userId, housingCompanyId!.toString());
     response.status(200).send(apartments);
   } catch (errors) {
     response.status(500).send({ errors: errors });
   }
 };
 
-export const getSingleApartmentRequest = async (
-  request: Request,
-  response: Response
-) => {
+export const getSingleApartmentRequest = async (request: Request, response: Response) => {
   // @ts-ignore
   const userId = request.user?.uid;
   const housingCompanyId = request.query.housing_company_id;
   const apartmentId = request.query.apartment_id;
   if (!housingCompanyId || !apartmentId) {
-    response
-      .status(500)
-      .send({ errors: { error: "Missing value", code: "missing_value" } });
+    response.status(500).send({ errors: { error: 'Missing value', code: 'missing_value' } });
   }
   try {
-    const apartment = await getUserApartment(
-      userId,
-      housingCompanyId!.toString(),
-      apartmentId!.toString()
-    );
+    const apartment = await getUserApartment(userId, housingCompanyId!.toString(), apartmentId!.toString());
     response.status(200).send(apartment);
   } catch (errors) {
     response.status(500).send({ errors: errors });
   }
 };
-export const getUserApartments = async (
-  userId: string,
-  housingCompanyId: string
-) : Promise<Apartment[]> => {
+export const getUserApartments = async (userId: string, housingCompanyId: string): Promise<Apartment[]> => {
   if (await isCompanyManager(userId, housingCompanyId)) {
     const apartments = await admin
       .firestore()
       .collectionGroup(APARTMENTS)
-      .where(HOUSING_COMPANY_ID, "==", housingCompanyId)
-      .where(IS_DELETED, "==", false)
+      .where(HOUSING_COMPANY_ID, '==', housingCompanyId)
+      .where(IS_DELETED, '==', false)
       .orderBy(BUILDING)
       .orderBy(HOUSE_CODE)
       .get();
@@ -387,19 +349,15 @@ export const getUserApartments = async (
   const apartments = await admin
     .firestore()
     .collectionGroup(APARTMENTS)
-    .where(HOUSING_COMPANY_ID, "==", housingCompanyId)
-    .where(IS_DELETED, "==", false)
-    .where(TENANTS, "array-contains", userId)
+    .where(HOUSING_COMPANY_ID, '==', housingCompanyId)
+    .where(IS_DELETED, '==', false)
+    .where(TENANTS, 'array-contains', userId)
     .orderBy(BUILDING)
     .orderBy(HOUSE_CODE)
     .get();
   return apartments.docs.map((doc) => doc.data() as Apartment);
 };
-export const getUserApartment = async (
-  userId: string,
-  housingCompanyId: string,
-  apartmentId: string
-) => {
+export const getUserApartment = async (userId: string, housingCompanyId: string, apartmentId: string) => {
   if (await isCompanyManager(userId, housingCompanyId)) {
     const apartment = await admin
       .firestore()
@@ -417,50 +375,35 @@ export const getUserApartment = async (
   const apartments = await admin
     .firestore()
     .collectionGroup(APARTMENTS)
-    .where("id", "==", apartmentId)
-    .where(HOUSING_COMPANY_ID, "==", housingCompanyId)
-    .where(IS_DELETED, "==", false)
-    .where(TENANTS, "array-contains", userId)
+    .where('id', '==', apartmentId)
+    .where(HOUSING_COMPANY_ID, '==', housingCompanyId)
+    .where(IS_DELETED, '==', false)
+    .where(TENANTS, 'array-contains', userId)
     .limit(1)
     .get();
   return apartments.docs.map((doc) => doc.data())[0];
 };
 
-export const addDocumentToApartment = async (
-  request: Request,
-  response: Response
-) => {
+export const addDocumentToApartment = async (request: Request, response: Response) => {
   // @ts-ignore
   const userId = request.user?.uid;
   const companyId = request.body?.housing_company_id;
   const apartmentId = request.body?.apartment_id;
-  const isTenant = await isAuthorizedAccessToApartment(
-    userId,
-    companyId,
-    apartmentId
-  );
+  const isTenant = await isAuthorizedAccessToApartment(userId, companyId, apartmentId);
   if (!isTenant) {
-    response
-      .status(403)
-      .send({ errors: { error: "Unauthorized", code: "not_tenant" } });
+    response.status(403).send({ errors: { error: 'Unauthorized', code: 'not_tenant' } });
     return;
   }
   const activeSubscription = await hasOneActiveSubscription(companyId);
   if (!activeSubscription) {
-    response
-      .status(403)
-      .send({
-        errors: { error: "Unauthorized", code: "no_active_subscription" },
-      });
+    response.status(403).send({
+      errors: { error: 'Unauthorized', code: 'no_active_subscription' },
+    });
     return;
   }
-  const subscriptionPlan = await getSubscriptionPlanById(
-    activeSubscription.subscription_plan_id
-  );
+  const subscriptionPlan = await getSubscriptionPlanById(activeSubscription.subscription_plan_id);
   if (subscriptionPlan.has_apartment_document !== true) {
-    response
-      .status(403)
-      .send({ errors: { error: "Unauthorized", code: "no_document_access" } });
+    response.status(403).send({ errors: { error: 'Unauthorized', code: 'no_document_access' } });
     return;
   }
   const type = request.body?.type?.toString() ?? DEFAULT;
@@ -471,7 +414,7 @@ export const addDocumentToApartment = async (
     await Promise.all(
       storageItems.map(async (link: string) => {
         try {
-          const lastPath = link.toString().split("/").at(-1);
+          const lastPath = link.toString().split('/').at(-1);
           const newFileLocation =
             // eslint-disable-next-line max-len
             `${HOUSING_COMPANIES}/${companyId}/${apartmentId}/${type}/${lastPath}`;
@@ -486,7 +429,7 @@ export const addDocumentToApartment = async (
             .doc().id;
           const storageItem: StorageItem = {
             type: type,
-            name: lastPath ?? "",
+            name: lastPath ?? '',
             id,
             is_deleted: false,
             uploaded_by: userId,
@@ -508,127 +451,101 @@ export const addDocumentToApartment = async (
           response.status(500).send({ errors: error });
           console.log(error);
         }
-      })
+      }),
     );
   }
   response.status(200).send(storageItemArray);
   storageItemTranslation(storageItemArray);
 };
 
-export const getApartmentDocuments = async (
-  request: Request,
-  response: Response
-) => {
+export const getApartmentDocuments = async (request: Request, response: Response) => {
   // @ts-ignore
   const userId = request.user?.uid;
   const companyId = request.query?.housing_company_id;
   const apartmentId = request.query?.apartment_id;
   const isTenant = await isAuthorizedAccessToApartment(
     userId,
-    companyId?.toString() ?? "",
-    apartmentId?.toString() ?? ""
+    companyId?.toString() ?? '',
+    apartmentId?.toString() ?? '',
   );
   if (!isTenant) {
-    response
-      .status(403)
-      .send({ errors: { error: "Unauthorized", code: "not_tenant" } });
+    response.status(403).send({ errors: { error: 'Unauthorized', code: 'not_tenant' } });
     return;
   }
   let basicRef = admin
     .firestore()
     .collection(HOUSING_COMPANIES)
-    .doc(companyId?.toString() ?? "")
+    .doc(companyId?.toString() ?? '')
     .collection(APARTMENTS)
-    .doc(apartmentId?.toString() ?? "")
+    .doc(apartmentId?.toString() ?? '')
     .collection(DOCUMENTS)
-    .where(IS_DELETED, "==", false);
+    .where(IS_DELETED, '==', false);
 
   const type = request.query.type;
   if (type) {
-    basicRef = basicRef.where("type", "==", type.toString());
+    basicRef = basicRef.where('type', '==', type.toString());
   }
   let limit = 3;
   if (request.query?.limit) {
-    limit = parseInt(request.query?.limit?.toString() ?? "3");
+    limit = parseInt(request.query?.limit?.toString() ?? '3');
   }
   if (request.query?.last_created_on) {
     const lastItemCreatedTime =
-      parseInt(
-        request.query?.last_created_on?.toString() ??
-          new Date().getTime().toString()
-      ) ?? new Date().getTime();
+      parseInt(request.query?.last_created_on?.toString() ?? new Date().getTime().toString()) ?? new Date().getTime();
     const documents = (
-      await basicRef
-        .orderBy(CREATED_ON, "desc")
-        .startAfter(lastItemCreatedTime)
-        .limit(limit)
-        .get()
+      await basicRef.orderBy(CREATED_ON, 'desc').startAfter(lastItemCreatedTime).limit(limit).get()
     ).docs.map((doc) => doc.data());
     response.status(200).send(documents);
   } else {
-    const documents = (
-      await basicRef.orderBy(CREATED_ON, "desc").limit(limit).get()
-    ).docs.map((doc) => doc.data());
+    const documents = (await basicRef.orderBy(CREATED_ON, 'desc').limit(limit).get()).docs.map((doc) => doc.data());
     response.status(200).send(documents);
   }
 };
 
-export const deleteApartmentDocuments = async (
-  request: Request,
-  response: Response
-) => {
+export const deleteApartmentDocuments = async (request: Request, response: Response) => {
   // @ts-ignore
   const userId = request.user?.uid;
   const companyId = request.body?.housing_company_id;
   const apartmentId = request.body?.apartment_id;
   const isTenant = await isAuthorizedAccessToApartment(
     userId,
-    companyId?.toString() ?? "",
-    apartmentId?.toString() ?? ""
+    companyId?.toString() ?? '',
+    apartmentId?.toString() ?? '',
   );
   if (!isTenant) {
-    response
-      .status(403)
-      .send({ errors: { error: "Unauthorized", code: "not_tenant" } });
+    response.status(403).send({ errors: { error: 'Unauthorized', code: 'not_tenant' } });
     return;
   }
   const docId = request.params?.document_id;
   await admin
     .firestore()
     .collection(HOUSING_COMPANIES)
-    .doc(companyId?.toString() ?? "")
+    .doc(companyId?.toString() ?? '')
     .collection(APARTMENTS)
-    .doc(apartmentId?.toString() ?? "")
+    .doc(apartmentId?.toString() ?? '')
     .collection(DOCUMENTS)
     .doc(docId)
     .update({ IS_DELETED: true });
   const basicRef = admin
     .firestore()
     .collection(HOUSING_COMPANIES)
-    .doc(companyId?.toString() ?? "")
+    .doc(companyId?.toString() ?? '')
     .collection(APARTMENTS)
-    .doc(apartmentId?.toString() ?? "")
+    .doc(apartmentId?.toString() ?? '')
     .collection(DOCUMENTS)
-    .where(IS_DELETED, "==", false);
-  const documents = (await basicRef.orderBy(CREATED_ON, "desc").get()).docs.map(
-    (doc) => doc.data()
-  );
+    .where(IS_DELETED, '==', false);
+  const documents = (await basicRef.orderBy(CREATED_ON, 'desc').get()).docs.map((doc) => doc.data());
   response.status(200).send(documents);
 };
 
-export const updateAparmentDocument = async (
-  request: Request,
-  response: Response
-) => {
+export const updateAparmentDocument = async (request: Request, response: Response) => {
   // @ts-ignore
   const userId = request.user?.uid;
   const companyId = request.body?.housing_company_id;
   const apartmentId = request.body?.apartment_id;
-  const isTenant = await isCompanyManager(userId, companyId?.toString() ?? "");
+  const isTenant = await isCompanyManager(userId, companyId?.toString() ?? '');
   if (!isTenant) {
-    response
-      .status(403)
-      .send({ errors: { error: "Unauthorized", code: "not_tenant" } });
+    response.status(403).send({ errors: { error: 'Unauthorized', code: 'not_tenant' } });
     return;
   }
   const updatedFile: FirebaseObject = {};
@@ -642,7 +559,7 @@ export const updateAparmentDocument = async (
   await admin
     .firestore()
     .collection(HOUSING_COMPANIES)
-    .doc(companyId?.toString() ?? "")
+    .doc(companyId?.toString() ?? '')
     .collection(APARTMENTS)
     .doc(apartmentId)
     .collection(DOCUMENTS)
@@ -651,7 +568,7 @@ export const updateAparmentDocument = async (
   const basicRef = admin
     .firestore()
     .collection(HOUSING_COMPANIES)
-    .doc(companyId?.toString() ?? "")
+    .doc(companyId?.toString() ?? '')
     .collection(APARTMENTS)
     .doc(apartmentId)
     .collection(DOCUMENTS)
@@ -660,31 +577,22 @@ export const updateAparmentDocument = async (
   response.status(200).send(documents);
 };
 
-export const getApartmentDocument = async (
-  request: Request,
-  response: Response
-) => {
+export const getApartmentDocument = async (request: Request, response: Response) => {
   // @ts-ignore
   const userId = request.user?.uid;
   const companyId = request.params?.housing_company_id;
   const docId = request.params?.document_id;
   const apartmentId = request.params?.apartment_id;
-  const isTenant = await isAuthorizedAccessToApartment(
-    userId,
-    companyId?.toString() ?? "",
-    apartmentId
-  );
+  const isTenant = await isAuthorizedAccessToApartment(userId, companyId?.toString() ?? '', apartmentId);
   if (!isTenant) {
-    response
-      .status(403)
-      .send({ errors: { error: "Unauthorized", code: "not_tenant" } });
+    response.status(403).send({ errors: { error: 'Unauthorized', code: 'not_tenant' } });
     return;
   }
   const document = (
     await admin
       .firestore()
       .collection(HOUSING_COMPANIES)
-      .doc(companyId?.toString() ?? "")
+      .doc(companyId?.toString() ?? '')
       .collection(APARTMENTS)
       .doc(apartmentId)
       .collection(DOCUMENTS)
@@ -693,13 +601,11 @@ export const getApartmentDocument = async (
   ).data() as StorageItem;
   if (document?.expired_on ?? 0 < new Date().getTime()) {
     document.expired_on = new Date().getTime();
-    document.presigned_url = await getPublicLinkForFile(
-      document.storage_link ?? ""
-    );
+    document.presigned_url = await getPublicLinkForFile(document.storage_link ?? '');
     admin
       .firestore()
       .collection(HOUSING_COMPANIES)
-      .doc(companyId?.toString() ?? "")
+      .doc(companyId?.toString() ?? '')
       .collection(APARTMENTS)
       .doc(apartmentId)
       .collection(DOCUMENTS)
@@ -711,58 +617,36 @@ export const getApartmentDocument = async (
 
 export const getApartmentCount = async (companyId: string) => {
   const apartmentCount = (
-    await admin
-      .firestore()
-      .collection(HOUSING_COMPANIES)
-      .doc(companyId)
-      .collection(APARTMENTS)
-      .count()
-      .get()
+    await admin.firestore().collection(HOUSING_COMPANIES).doc(companyId).collection(APARTMENTS).count().get()
   ).data().count;
   return apartmentCount;
 };
 
-
-export const getApartmentTenant= async (companyId: string, apartmentId: string) => {
+export const getApartmentTenant = async (companyId: string, apartmentId: string) => {
   try {
     const apartment = (
-      await admin
-        .firestore()
-        .collection(HOUSING_COMPANIES).doc(companyId)
-        .collection(APARTMENTS).doc(apartmentId)
-        .get()
+      await admin.firestore().collection(HOUSING_COMPANIES).doc(companyId).collection(APARTMENTS).doc(apartmentId).get()
     ).data() as Apartment;
-    const combineUsers = [
-      ...new Set([...(apartment.owners ?? []), ...(apartment.tenants ?? [])]),
-    ];
+    const combineUsers = [...new Set([...(apartment.owners ?? []), ...(apartment.tenants ?? [])])];
     const apartmentTenant = await retrieveUsers(combineUsers);
-  
+
     return apartmentTenant;
-  } catch (e) { 
+  } catch (e) {
     console.log(e);
   }
-  return []
-}
+  return [];
+};
 
-export const getApartmentTenantRequest = async (request: Request, response: Response) => { 
+export const getApartmentTenantRequest = async (request: Request, response: Response) => {
   // @ts-ignore
   const userId = request.user?.uid;
   const companyId = request.query?.housing_company_id;
   const apartmentId = request.query?.apartment_id;
-  const isTenant = await isApartmentOwner(
-    userId,
-    companyId?.toString() ?? "",
-    apartmentId?.toString() ?? ""
-  );
+  const isTenant = await isApartmentOwner(userId, companyId?.toString() ?? '', apartmentId?.toString() ?? '');
   if (!isTenant && !isAdminRole(userId)) {
-    response
-      .status(403)
-      .send({ errors: { error: "Unauthorized", code: "not_tenant" } });
+    response.status(403).send({ errors: { error: 'Unauthorized', code: 'not_tenant' } });
     return;
   }
-  const apartmentTenant = await getApartmentTenant(
-    companyId?.toString() ?? "", 
-    apartmentId?.toString() ?? ""
-    );
+  const apartmentTenant = await getApartmentTenant(companyId?.toString() ?? '', apartmentId?.toString() ?? '');
   response.status(200).send(apartmentTenant);
-}
+};

@@ -1,4 +1,4 @@
-import { FirebaseObject } from "./firebase_object";
+import { FirebaseObject } from './firebase_object';
 
 export interface Tax extends FirebaseObject {
   tax_percentage: number;

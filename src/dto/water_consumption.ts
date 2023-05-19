@@ -1,5 +1,5 @@
-import { ConsumptionValue } from "./consumption_value";
-import { FirebaseObject } from "./firebase_object";
+import { ConsumptionValue } from './consumption_value';
+import { FirebaseObject } from './firebase_object';
 
 export interface WaterConsumption extends FirebaseObject {
   basic_fee: number;

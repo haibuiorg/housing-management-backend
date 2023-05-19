@@ -1,7 +1,7 @@
-import { Address } from "./address";
-import { FirebaseObject } from "./firebase_object";
-import { NotificationChannel } from "./notification_channel";
-import { UI } from "./ui";
+import { Address } from './address';
+import { FirebaseObject } from './firebase_object';
+import { NotificationChannel } from './notification_channel';
+import { UI } from './ui';
 
 export interface Company extends FirebaseObject {
   id: string;

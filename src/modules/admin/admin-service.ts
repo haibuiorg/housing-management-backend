@@ -1,27 +1,25 @@
 /* eslint-disable camelcase */
-import { Request, Response } from "express";
-import admin from "firebase-admin";
+import { Request, Response } from 'express';
+import admin from 'firebase-admin';
 import {
   CONTACT_LEADS,
   COUNTRY_CODE,
   HOUSING_COMPANIES,
   IS_ACTIVE,
   PAYMENT_PRODUCT_ITEMS,
+  STORAGE_ITEMS,
   SUBSCRIPTION_PLAN,
-} from "../../constants";
-import { SubscriptionPlan } from "../../dto/subscription_plan";
-import { isAdminRole } from "../authentication/authentication";
-import {
-  addStripeProduct,
-  addStripeSubscriptionProduct,
-} from "../payment-externals/payment-service";
-import { PaymentProductItem } from "../../dto/payment-product-item";
-import { getCountryData } from "../country/manage_country";
+} from '../../constants';
+import { SubscriptionPlan } from '../../dto/subscription_plan';
+import { isAdminRole } from '../authentication/authentication';
+import { addStripeProduct, addStripeSubscriptionProduct } from '../payment-externals/payment-service';
+import { PaymentProductItem } from '../../dto/payment-product-item';
+import { getCountryData } from '../country/manage_country';
+import { addReferenceDoc, createPineconeIndex } from '../chat-helper/chat-helper-service';
+import { copyStorageFolder } from '../storage/manage_storage';
+import { StorageItem } from '../../dto/storage_item';
 
-export const addSubscriptionPlan = async (
-  request: Request,
-  response: Response
-) => {
+export const addSubscriptionPlan = async (request: Request, response: Response) => {
   // @ts-ignore
   const userId = request.user.uid;
   const isAdmin = await isAdminRole(userId);
@@ -32,23 +30,18 @@ export const addSubscriptionPlan = async (
   const {
     name,
     price,
-    country_code = "fi",
-    currency = "eur",
-    interval = "month",
+    country_code = 'fi',
+    currency = 'eur',
+    interval = 'month',
     interval_count = 1,
     max_announcement = 5,
     max_invoice_number = 1,
     additional_invoice_cost = 0.99,
     has_apartment_document = false,
-    notification_types = ["push"],
+    notification_types = ['push'],
     max_messaging_channels = 3,
   } = request.body;
-  const stripeSubscription = await addStripeSubscriptionProduct(
-    name,
-    interval,
-    currency,
-    price
-  );
+  const stripeSubscription = await addStripeSubscriptionProduct(name, interval, currency, price);
   const subscriptionStripeProductId = stripeSubscription.id;
   const subscrptionStripePriceId = stripeSubscription.default_price;
   const id = admin.firestore().collection(SUBSCRIPTION_PLAN).doc().id;
@@ -73,22 +66,15 @@ export const addSubscriptionPlan = async (
     has_apartment_document,
   };
   try {
-    await admin
-      .firestore()
-      .collection(SUBSCRIPTION_PLAN)
-      .doc(id)
-      .set(subscriptionPlan);
+    await admin.firestore().collection(SUBSCRIPTION_PLAN).doc(id).set(subscriptionPlan);
     response.send(subscriptionPlan);
   } catch (error) {
     response.sendStatus(500);
   }
 };
 
-export const addPaymentProductItem = async (
-  request: Request,
-  response: Response
-) => {
-  const { amount, name, country_code, description = "", tax_percentage } = request.body;
+export const addPaymentProductItem = async (request: Request, response: Response) => {
+  const { amount, name, country_code, description = '', tax_percentage } = request.body;
   // @ts-ignore
   const userId = request.user.uid;
   if (!(await isAdminRole(userId))) {
@@ -96,11 +82,7 @@ export const addPaymentProductItem = async (
     return;
   }
   const country = await getCountryData(country_code);
-  const stripeProduct = await addStripeProduct(
-    name,
-    country.currency_code,
-    amount
-  );
+  const stripeProduct = await addStripeProduct(name, country.currency_code, amount);
   const stripeProductId = stripeProduct.id;
   const stripePriceId = stripeProduct.default_price;
   const id = admin.firestore().collection(PAYMENT_PRODUCT_ITEMS).doc().id;
@@ -109,7 +91,7 @@ export const addPaymentProductItem = async (
     id,
     name,
     amount,
-    tax_percentage : tax_percentage ?? 0,
+    tax_percentage: tax_percentage ?? 0,
     currency_code: country.currency_code,
     country_code,
     is_active: true,
@@ -119,20 +101,13 @@ export const addPaymentProductItem = async (
     company_id: null,
   };
   try {
-    await admin
-      .firestore()
-      .collection(PAYMENT_PRODUCT_ITEMS)
-      .doc(id)
-      .set(paymentProducItem);
+    await admin.firestore().collection(PAYMENT_PRODUCT_ITEMS).doc(id).set(paymentProducItem);
     response.send(paymentProducItem);
   } catch (error) {
     response.sendStatus(500);
   }
 };
-export const deletePaymentProductItem = async (
-  request: Request,
-  response: Response
-) => {
+export const deletePaymentProductItem = async (request: Request, response: Response) => {
   const { id } = request.query;
   // @ts-ignore
   const userId = request.user.uid;
@@ -144,7 +119,7 @@ export const deletePaymentProductItem = async (
     await admin
       .firestore()
       .collection(PAYMENT_PRODUCT_ITEMS)
-      .doc(id?.toString() ?? "")
+      .doc(id?.toString() ?? '')
       .update({ is_active: false });
     response.sendStatus(200);
   } catch (error) {
@@ -152,32 +127,24 @@ export const deletePaymentProductItem = async (
   }
 };
 
-export const getPaymentProductItems = async (
-  request: Request,
-  response: Response
-) => {
-  const country_code = request.query.country_code?.toString() ?? "fi";
+export const getPaymentProductItems = async (request: Request, response: Response) => {
+  const country_code = request.query.country_code?.toString() ?? 'fi';
   try {
     const paymentProductItems = await admin
       .firestore()
       .collection(PAYMENT_PRODUCT_ITEMS)
-      .where(IS_ACTIVE, "==", true)
-      .where(COUNTRY_CODE, "==", country_code)
-      .where("company_id", "==", null)
+      .where(IS_ACTIVE, '==', true)
+      .where(COUNTRY_CODE, '==', country_code)
+      .where('company_id', '==', null)
       .get();
-    const paymentProductItemsList = paymentProductItems.docs.map(
-      (doc) => doc.data() as PaymentProductItem
-    );
+    const paymentProductItemsList = paymentProductItems.docs.map((doc) => doc.data() as PaymentProductItem);
     response.send(paymentProductItemsList);
   } catch (error) {
     response.sendStatus(500);
   }
 };
 
-export const deleteSubscriptionPlan = async (
-  request: Request,
-  response: Response
-) => {
+export const deleteSubscriptionPlan = async (request: Request, response: Response) => {
   // @ts-ignore
   const userId = request.user.uid;
   const isAdmin = await isAdminRole(userId);
@@ -185,28 +152,20 @@ export const deleteSubscriptionPlan = async (
     response.sendStatus(403);
     return;
   }
-  const subscriptionPlanId =
-    request.query.subscription_plan_id?.toString() ?? "";
-  if (subscriptionPlanId === "") {
+  const subscriptionPlanId = request.query.subscription_plan_id?.toString() ?? '';
+  if (subscriptionPlanId === '') {
     response.sendStatus(400);
     return;
   }
   try {
-    await admin
-      .firestore()
-      .collection(SUBSCRIPTION_PLAN)
-      .doc(subscriptionPlanId)
-      .update({ is_active: false });
+    await admin.firestore().collection(SUBSCRIPTION_PLAN).doc(subscriptionPlanId).update({ is_active: false });
     response.sendStatus(200);
   } catch (error) {
     response.sendStatus(500);
   }
 };
 
-export const getContactLeadListRequest = async (
-  request: Request,
-  response: Response
-) => {
+export const getContactLeadListRequest = async (request: Request, response: Response) => {
   // @ts-ignore
   const userId = request.user.uid;
   const isAdmin = await isAdminRole(userId);
@@ -214,52 +173,34 @@ export const getContactLeadListRequest = async (
     response.sendStatus(403);
     return;
   }
-  const status = request.query.status?.toString() ?? "";
-  const type = request.query.type?.toString() ?? "";
-  if (status === "" && type === "") {
-    const contactLead = (
-      await admin.firestore().collection(CONTACT_LEADS).get()
-    ).docs.map((doc) => doc.data());
+  const status = request.query.status?.toString() ?? '';
+  const type = request.query.type?.toString() ?? '';
+  if (status === '' && type === '') {
+    const contactLead = (await admin.firestore().collection(CONTACT_LEADS).get()).docs.map((doc) => doc.data());
     response.send(contactLead);
     return;
   }
-  if (status === "" && type !== "") {
-    const contactLead = (
-      await admin
-        .firestore()
-        .collection(CONTACT_LEADS)
-        .where("type", "==", type)
-        .get()
-    ).docs.map((doc) => doc.data());
+  if (status === '' && type !== '') {
+    const contactLead = (await admin.firestore().collection(CONTACT_LEADS).where('type', '==', type).get()).docs.map(
+      (doc) => doc.data(),
+    );
     response.send(contactLead);
     return;
   }
-  if (status !== "" && type === "") {
+  if (status !== '' && type === '') {
     const contactLead = (
-      await admin
-        .firestore()
-        .collection(CONTACT_LEADS)
-        .where("status", "==", status)
-        .get()
+      await admin.firestore().collection(CONTACT_LEADS).where('status', '==', status).get()
     ).docs.map((doc) => doc.data());
     response.send(contactLead);
     return;
   }
   const contactLead = (
-    await admin
-      .firestore()
-      .collection(CONTACT_LEADS)
-      .where("status", "==", status)
-      .where("type", "==", type)
-      .get()
+    await admin.firestore().collection(CONTACT_LEADS).where('status', '==', status).where('type', '==', type).get()
   ).docs.map((doc) => doc.data());
   response.send(contactLead);
 };
 
-export const updateContactLeadStatus = async (
-  request: Request,
-  response: Response
-) => {
+export const updateContactLeadStatus = async (request: Request, response: Response) => {
   // @ts-ignore
   const userId = request.user.uid;
   const isAdmin = await isAdminRole(userId);
@@ -280,14 +221,7 @@ export const getAllCompanies = async (request: Request, response: Response) => {
     response.sendStatus(403);
     return;
   }
-  const lastItemCreatedTime =
-    parseInt(
-      request.query?.last_created_on?.toString() ??
-        new Date().getTime().toString()
-    ) ?? new Date().getTime();
-  const limit = request.query.limit
-    ? parseInt(request.query.limit.toString())
-    : 20;
+  const limit = request.query.limit ? parseInt(request.query.limit.toString()) : 20;
   const companies = (
     await admin
       .firestore()
@@ -298,4 +232,70 @@ export const getAllCompanies = async (request: Request, response: Response) => {
       .get()
   ).docs.map((doc) => doc.data());
   response.send(companies);
+};
+
+export const addStorageLinkReferenceDocument = async (request: Request, response: Response) => {
+  // @ts-ignore
+  const userId = request.user.uid;
+  const isAdmin = await isAdminRole(userId);
+  if (!isAdmin) {
+    response.sendStatus(403);
+    return;
+  }
+  const { storage_links, doc_type, language_code } = request.body;
+  let index_name = 'housing-company-generic';
+  if (doc_type === 'housing-company-generic') {
+    index_name = 'housing-company-generic';
+  }
+  try {
+    const storageItems: StorageItem[] = [];
+    await Promise.all(
+      storage_links.map(async (storage_link: any) => {
+        const lastPath = storage_link.toString().split('/').at(-1);
+        const newFileLocation = `${STORAGE_ITEMS}/${doc_type}/${lastPath}`;
+        await copyStorageFolder(storage_link, newFileLocation);
+        const createdOn = new Date().getTime();
+        const id = admin.firestore().collection(STORAGE_ITEMS).doc().id;
+        const storageItem: StorageItem = {
+          type: doc_type,
+          name: lastPath ?? '',
+          id: id,
+          is_deleted: false,
+          uploaded_by: userId,
+          storage_link: newFileLocation,
+          created_on: createdOn,
+          summary_translations: null,
+        };
+        await admin.firestore().collection(STORAGE_ITEMS).doc(id).set(storageItem);
+        storageItems.push(storageItem);
+        try {
+          addReferenceDoc(newFileLocation, lastPath, doc_type, language_code, index_name);
+        } catch (error) {
+          console.log(error);
+        }
+      }),
+    );
+    response.status(200).send(storageItems);
+  } catch (error) {
+    console.log(error);
+    response.sendStatus(500);
+  }
+};
+
+export const createDocumentIndex = async (request: Request, response: Response) => {
+  // @ts-ignore
+  const userId = request.user.uid;
+  const isAdmin = await isAdminRole(userId);
+  if (!isAdmin) {
+    response.sendStatus(403);
+    return;
+  }
+  const { index_name } = request.body;
+  try {
+    await createPineconeIndex(index_name);
+    response.sendStatus(200);
+  } catch (error) {
+    console.log(error);
+    response.sendStatus(500);
+  }
 };

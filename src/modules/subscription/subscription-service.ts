@@ -1,6 +1,6 @@
 /* eslint-disable camelcase */
-import { Request, Response } from "express";
-import admin from "firebase-admin";
+import { Request, Response } from 'express';
+import admin from 'firebase-admin';
 import {
   HOUSING_COMPANIES,
   IS_ACTIVE,
@@ -8,11 +8,8 @@ import {
   SUBSCRIPTIONS,
   SUBSCRIPTION_INVOICES,
   SUBSCRIPTION_PLAN,
-} from "../../constants";
-import {
-  isAdminRole,
-  isCompanyManager,
-} from "../authentication/authentication";
+} from '../../constants';
+import { isAdminRole, isCompanyManager } from '../authentication/authentication';
 import {
   cancelSubscription,
   createPaymentProductLink,
@@ -23,19 +20,16 @@ import {
   retrieveSubscriptionDetail,
   updateSubscriptionPrice,
   updateSubscriptionQuantity,
-} from "../payment-externals/payment-service";
-import { SubscriptionPlan } from "../../dto/subscription_plan";
-import { Subscription } from "../../dto/subscription";
-import { retrieveUser } from "../user/manage_user";
-import { PaymentProductItem } from "../../dto/payment-product-item";
+} from '../payment-externals/payment-service';
+import { SubscriptionPlan } from '../../dto/subscription_plan';
+import { Subscription } from '../../dto/subscription';
+import { retrieveUser } from '../user/manage_user';
+import { PaymentProductItem } from '../../dto/payment-product-item';
 
-export const getCompanySubscriptionRequest = async (
-  request: Request,
-  response: Response
-) => {
+export const getCompanySubscriptionRequest = async (request: Request, response: Response) => {
   // @ts-ignore
   const userId = request.user.uid;
-  const companyId = request.query.company_id?.toString() ?? "";
+  const companyId = request.query.company_id?.toString() ?? '';
   const company = await isCompanyManager(userId, companyId);
   if (!company) {
     response.sendStatus(403);
@@ -47,36 +41,27 @@ export const getCompanySubscriptionRequest = async (
       .collection(HOUSING_COMPANIES)
       .doc(companyId)
       .collection(SUBSCRIPTIONS)
-      .where(IS_ACTIVE, "==", true)
+      .where(IS_ACTIVE, '==', true)
       .get()
   ).docs.map((doc) => doc.data());
   response.send(subscriptions);
 };
 
-export const getSubscriptionDetailByIdRequest = async (
-  request: Request,
-  response: Response
-) => {
+export const getSubscriptionDetailByIdRequest = async (request: Request, response: Response) => {
   // @ts-ignore
   const userId = request.user.uid;
-  const companyId = request.query.company_id?.toString() ?? "";
+  const companyId = request.query.company_id?.toString() ?? '';
   const company = await isCompanyManager(userId, companyId);
   if (!company) {
     response.sendStatus(403);
     return;
   }
-  const subscriptionId = request.query.subscription_id?.toString() ?? "";
-  const subscription = await getSubscriptionDetailById(
-    subscriptionId,
-    companyId
-  );
+  const subscriptionId = request.query.subscription_id?.toString() ?? '';
+  const subscription = await getSubscriptionDetailById(subscriptionId, companyId);
   response.send(subscription);
 };
 
-export const getSubscriptionDetailById = async (
-  subscriptionId: string,
-  companyId: string
-) => {
+export const getSubscriptionDetailById = async (subscriptionId: string, companyId: string) => {
   try {
     const subscription = (
       await admin
@@ -88,9 +73,7 @@ export const getSubscriptionDetailById = async (
         .get()
     ).data() as Subscription;
     if (subscription.payment_service_subscription_id) {
-      const suscriptionDetail = await retrieveSubscriptionDetail(
-        subscription.payment_service_subscription_id
-      );
+      const suscriptionDetail = await retrieveSubscriptionDetail(subscription.payment_service_subscription_id);
       subscription.detail = suscriptionDetail;
     }
     return subscription;
@@ -99,14 +82,11 @@ export const getSubscriptionDetailById = async (
   }
 };
 
-export const cancelSubscriptionRequest = async (
-  request: Request,
-  response: Response
-) => {
-  const id = request.query.subscription_id?.toString() ?? "";
+export const cancelSubscriptionRequest = async (request: Request, response: Response) => {
+  const id = request.query.subscription_id?.toString() ?? '';
   // @ts-ignore
   const userId = request.user.uid;
-  const companyId = request.query.company_id?.toString() ?? "";
+  const companyId = request.query.company_id?.toString() ?? '';
   const company = await isCompanyManager(userId, companyId);
   if (!company) {
     response.sendStatus(403);
@@ -117,39 +97,24 @@ export const cancelSubscriptionRequest = async (
     response.sendStatus(404);
     return;
   }
-  const subscriptionDetail = await cancelSubscription(
-    subscription.payment_service_subscription_id!
-  );
+  const subscriptionDetail = await cancelSubscription(subscription.payment_service_subscription_id!);
   response.status(200).send(subscriptionDetail);
 };
 
-export const getSubscriptionPlanById = async (
-  id: string
-): Promise<SubscriptionPlan> => {
-  const subscription = (
-    await admin.firestore().collection(SUBSCRIPTION_PLAN).doc(id).get()
-  ).data();
+export const getSubscriptionPlanById = async (id: string): Promise<SubscriptionPlan> => {
+  const subscription = (await admin.firestore().collection(SUBSCRIPTION_PLAN).doc(id).get()).data();
   return subscription as SubscriptionPlan;
 };
 
-export const subscriptionStatusCheck = async (
-  request: Request,
-  response: Response
-) => {
-  const checkOutSession = await retrieveCheckOutSession(
-    request.query.session_id?.toString() ?? ""
-  );
-  if (
-    checkOutSession.payment_status != "paid" &&
-    checkOutSession.payment_status != "no_payment_required"
-  ) {
+export const subscriptionStatusCheck = async (request: Request, response: Response) => {
+  const checkOutSession = await retrieveCheckOutSession(request.query.session_id?.toString() ?? '');
+  if (checkOutSession.payment_status != 'paid' && checkOutSession.payment_status != 'no_payment_required') {
     response.sendStatus(404);
     return;
   }
-  const subscriptionPlanId =
-    checkOutSession.metadata.subscription_plan_id?.toString() ?? "";
-  const companyId = checkOutSession.metadata.company_id?.toString() ?? "";
-  const userId = checkOutSession.metadata.user_id?.toString() ?? "";
+  const subscriptionPlanId = checkOutSession.metadata.subscription_plan_id?.toString() ?? '';
+  const companyId = checkOutSession.metadata.company_id?.toString() ?? '';
+  const userId = checkOutSession.metadata.user_id?.toString() ?? '';
   const checkoutId = checkOutSession.id;
 
   // const subscriptionPlan = await getSubscriptionPlanById(subscriptionPlanId);
@@ -160,7 +125,7 @@ export const subscriptionStatusCheck = async (
     checkOutSession.metadata.quantity ?? 1,
     checkoutId,
     checkOutSession.subscription,
-    checkOutSession.invoice_url
+    checkOutSession.invoice_url,
   );
   response.send(subscription);
 };
@@ -172,7 +137,7 @@ export const addCompanySubscription = async (
   quantity: number,
   checkOutSessionId?: string,
   paymentServiceSubscriptionId?: string,
-  invoiceUrl?: string
+  invoiceUrl?: string,
 ) => {
   const createdOn = new Date().getTime();
   const subscriptionId = admin
@@ -187,17 +152,15 @@ export const addCompanySubscription = async (
     payment_service_subscription_id: paymentServiceSubscriptionId,
     subscription_plan_id: subscriptionPlanId,
     created_by: userId,
-    checkout_session_id: checkOutSessionId ?? "",
+    checkout_session_id: checkOutSessionId ?? '',
     created_on: createdOn,
     company_id: companyId,
     latest_invoice_paid: false,
-    latest_invoice_url: invoiceUrl ?? "",
+    latest_invoice_url: invoiceUrl ?? '',
   };
   subscription.quantity = Number(quantity);
   if (subscription.payment_service_subscription_id) {
-    const suscriptionDetail = await retrieveSubscriptionDetail(
-      subscription.payment_service_subscription_id
-    );
+    const suscriptionDetail = await retrieveSubscriptionDetail(subscription.payment_service_subscription_id);
     subscription.detail = suscriptionDetail;
   }
   await admin
@@ -214,7 +177,7 @@ export const updateCompanySubscription = async (
   companyId: string,
   subscription_plan_id: string,
   paymentServiceSubscriptionId: string,
-  quantity: number
+  quantity: number,
 ) => {
   const hasExistingSuscription = (
     await admin
@@ -222,11 +185,7 @@ export const updateCompanySubscription = async (
       .collection(HOUSING_COMPANIES)
       .doc(companyId)
       .collection(SUBSCRIPTIONS)
-      .where(
-        "payment_service_subscription_id",
-        "==",
-        paymentServiceSubscriptionId ?? ""
-      )
+      .where('payment_service_subscription_id', '==', paymentServiceSubscriptionId ?? '')
       .get()
   ).docs.map((doc) => doc.data()) as Subscription[];
   if (hasExistingSuscription.length > 0) {
@@ -254,10 +213,7 @@ export const getPaymentKey = async (request: Request, response: Response) => {
   response.send({ key: key });
 };
 
-export const createPaymentLinkSubscription = async (
-  request: Request,
-  response: Response
-) => {
+export const createPaymentLinkSubscription = async (request: Request, response: Response) => {
   // @ts-ignore
   const userId = request.user.uid;
   const companyId = request.body.company_id;
@@ -273,8 +229,8 @@ export const createPaymentLinkSubscription = async (
       .collection(HOUSING_COMPANIES)
       .doc(companyId)
       .collection(SUBSCRIPTIONS)
-      .where("subscription_plan_id", "==", subscription_plan_id ?? "")
-      .where(IS_ACTIVE, "==", true)
+      .where('subscription_plan_id', '==', subscription_plan_id ?? '')
+      .where(IS_ACTIVE, '==', true)
       .get()
   ).docs.map((doc) => doc.data()) as Subscription[];
   const subscriptionPlan = await getSubscriptionPlanById(subscription_plan_id);
@@ -287,7 +243,7 @@ export const createPaymentLinkSubscription = async (
     const paymentLink = await addMoreAccountToSubscription(
       hasExistingSuscription[0].payment_service_subscription_id!,
       subscriptionPlan.stripe_price_id,
-      quantity
+      quantity,
     );
     if (paymentLink.length < 1) {
       response.sendStatus(500);
@@ -307,7 +263,7 @@ export const createPaymentLinkSubscription = async (
       activeSubscription.payment_service_subscription_id!,
       subscriptionPlan.stripe_price_id,
       subscription_plan_id,
-      quantity
+      quantity,
     );
     if (paymentLink.length < 1) {
       response.sendStatus(500);
@@ -323,38 +279,33 @@ export const createPaymentLinkSubscription = async (
       subscription_plan_id,
       companyId,
       userId,
-      quantity
+      quantity,
     )
   ).hosted_invoice_url;
   response.status(200).send({ payment_url: paymentLink });
 };
 
-export const getAvailableSubscriptionPlans = async (
-  request: Request,
-  response: Response
-) => {
-  const country_code = request.query.country_code ?? "fi";
+export const getAvailableSubscriptionPlans = async (request: Request, response: Response) => {
+  const country_code = request.query.country_code ?? 'fi';
   const subscriptionList = (
     await admin
       .firestore()
       .collection(SUBSCRIPTION_PLAN)
-      .where("is_active", "==", true)
-      .where("country_code", "==", country_code)
+      .where('is_active', '==', true)
+      .where('country_code', '==', country_code)
       .get()
   ).docs.map((doc) => doc.data());
   response.send(subscriptionList);
 };
 
-export const hasOneActiveSubscription = async (
-  companyId: string
-): Promise<Subscription> => {
+export const hasOneActiveSubscription = async (companyId: string): Promise<Subscription> => {
   const hasActiveSubscription = (
     await admin
       .firestore()
       .collection(HOUSING_COMPANIES)
       .doc(companyId)
       .collection(SUBSCRIPTIONS)
-      .where(IS_ACTIVE, "==", true)
+      .where(IS_ACTIVE, '==', true)
       .get()
   ).docs.map((doc) => doc.data())[0];
   return hasActiveSubscription as Subscription;
@@ -363,41 +314,33 @@ export const hasOneActiveSubscription = async (
 const addMoreAccountToSubscription = async (
   payment_service_subscription_id: string,
   stripe_price_id: string,
-  quantity: number
+  quantity: number,
 ) => {
-  const newSubscription = await updateSubscriptionQuantity(
-    payment_service_subscription_id,
-    stripe_price_id,
-    quantity
-  );
+  const newSubscription = await updateSubscriptionQuantity(payment_service_subscription_id, stripe_price_id, quantity);
   if (!newSubscription) {
-    return "";
+    return '';
   }
-  const latestInvoice = await retrieveInvoiceDetail(
-    newSubscription.latest_invoice
-  );
+  const latestInvoice = await retrieveInvoiceDetail(newSubscription.latest_invoice);
   return latestInvoice.hosted_invoice_url;
 };
 const changeSubscription = async (
   payment_service_subscription_id: string,
   stripe_price_id: string,
   subscriptionPlanId: string,
-  quantity: number
+  quantity: number,
 ): Promise<string> => {
   const newSubscription = await updateSubscriptionPrice(
     payment_service_subscription_id,
     stripe_price_id,
     subscriptionPlanId,
-    quantity
+    quantity,
   );
   if (!newSubscription) {
-    return "";
+    return '';
   }
-  const latestInvoice = await retrieveInvoiceDetail(
-    newSubscription.latest_invoice
-  );
+  const latestInvoice = await retrieveInvoiceDetail(newSubscription.latest_invoice);
   if (!latestInvoice) {
-    return "";
+    return '';
   }
   return latestInvoice.hosted_invoice_url;
 };
@@ -405,7 +348,7 @@ const changeSubscription = async (
 export const markSubscriptionStatus = async (
   companyId: string,
   subscriptionPlanId: string,
-  latestInvoiceUrl?: string
+  latestInvoiceUrl?: string,
 ) => {
   const subscriptions = (
     await admin
@@ -413,7 +356,7 @@ export const markSubscriptionStatus = async (
       .collection(HOUSING_COMPANIES)
       .doc(companyId)
       .collection(SUBSCRIPTIONS)
-      .where("subscription_plan_id", "==", subscriptionPlanId)
+      .where('subscription_plan_id', '==', subscriptionPlanId)
       .get()
   ).docs.map((doc) => doc.data());
   if (!subscriptions || subscriptions.length != 1) {
@@ -428,31 +371,21 @@ export const markSubscriptionStatus = async (
     : {
         latest_invoice_paid: true,
       };
-  await admin
-    .firestore()
-    .collection(HOUSING_COMPANIES)
-    .doc(companyId)
-    .collection(SUBSCRIPTIONS)
-    .doc(id)
-    .update(data);
+  await admin.firestore().collection(HOUSING_COMPANIES).doc(companyId).collection(SUBSCRIPTIONS).doc(id).update(data);
 };
 
-export const addCompanySubscriptionInvoice = async (
-  companyId: string,
-  subscriptionPlanId: string,
-  invoice: any
-) => {
+export const addCompanySubscriptionInvoice = async (companyId: string, subscriptionPlanId: string, invoice: any) => {
   const subscriptions = (
     await admin
       .firestore()
       .collection(HOUSING_COMPANIES)
       .doc(companyId)
       .collection(SUBSCRIPTIONS)
-      .where("subscription_plan_id", "==", subscriptionPlanId)
+      .where('subscription_plan_id', '==', subscriptionPlanId)
       .get()
   ).docs.map((doc) => doc.data());
   if (!subscriptions || subscriptions.length != 1) {
-    throw new Error("Subscription not found");
+    throw new Error('Subscription not found');
   }
   const id = subscriptions[0].id;
   const invoiceId = admin
@@ -474,48 +407,38 @@ export const addCompanySubscriptionInvoice = async (
     .set(invoice);
 };
 
-export const getAvailablePaymentProductItems = async (
-  request: Request,
-  response: Response
-) => {
-  const country_code = request.query.country_code ?? "fi";
+export const getAvailablePaymentProductItems = async (request: Request, response: Response) => {
+  const country_code = request.query.country_code ?? 'fi';
   const productItems = (
     await admin
       .firestore()
       .collection(PAYMENT_PRODUCT_ITEMS)
-      .where("is_active", "==", true)
-      .where("country_code", "==", country_code)
-      .where("company_id", "==", null)
+      .where('is_active', '==', true)
+      .where('country_code', '==', country_code)
+      .where('company_id', '==', null)
       .get()
   ).docs.map((doc) => doc.data());
   response.send(productItems);
 };
 
-export const purchasePaymentProductItem = async (
-  request: Request,
-  response: Response
-) => {
+export const purchasePaymentProductItem = async (request: Request, response: Response) => {
   const company_id = request.body.company_id;
   const payment_product_item_id = request.body.payment_product_item_id;
   const quantity = request.body.quantity;
   // @ts-ignore
   const userId = request.user.uid;
-  if (!await isCompanyManager(userId, company_id)) {
+  if (!(await isCompanyManager(userId, company_id))) {
     response.sendStatus(403);
     return;
   }
   const paymentProductItem = (
-    await admin
-      .firestore()
-      .collection(PAYMENT_PRODUCT_ITEMS)
-      .doc(payment_product_item_id)
-      .get()
+    await admin.firestore().collection(PAYMENT_PRODUCT_ITEMS).doc(payment_product_item_id).get()
   ).data() as PaymentProductItem;
   const session = await createPaymentProductLink(
     company_id,
     payment_product_item_id,
     paymentProductItem.stripe_price_id,
-    Number(quantity)
+    Number(quantity),
   );
   response.status(200).send({ payment_url: session.url });
 };

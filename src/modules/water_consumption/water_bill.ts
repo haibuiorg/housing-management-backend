@@ -1,43 +1,28 @@
-import { Request, Response } from "express";
-import { Apartment } from "../../dto/apartment";
-import { Company } from "../../dto/company";
-import { WaterConsumption } from "../../dto/water_consumption";
-import { getCompanyData } from "../housing/manage_housing_company";
-import {
-  getLatestWaterConsumption,
-  getPreviousWaterConsumptionAfterAddNew,
-} from "./manage_water_consumption";
-import admin from "firebase-admin";
-import {
-  APARTMENTS,
-  CREATED_ON,
-  HOUSING_COMPANIES,
-  PERIOD,
-  WATER_BILLS,
-  YEAR,
-} from "../../constants";
-import { isAuthorizedAccessToApartment } from "../authentication/authentication";
-import { getPublicLinkForFile } from "../storage/manage_storage";
-import { BankAccount } from "../../dto/bank_account";
-import { getBankAccounts } from "../payment/manage_payment";
-import { GenerateInvoiceParams, generateInvoiceList } from "../invoice-generator/invoice_service";
-import { retrieveUser } from "../user/manage_user";
-import { Invoice, InvoiceItem } from "../../dto/invoice";
+import { Request, Response } from 'express';
+import { Apartment } from '../../dto/apartment';
+import { Company } from '../../dto/company';
+import { WaterConsumption } from '../../dto/water_consumption';
+import { getCompanyData } from '../housing/manage_housing_company';
+import { getLatestWaterConsumption, getPreviousWaterConsumptionAfterAddNew } from './manage_water_consumption';
+import admin from 'firebase-admin';
+import { APARTMENTS, CREATED_ON, HOUSING_COMPANIES, PERIOD, WATER_BILLS, YEAR } from '../../constants';
+import { isAuthorizedAccessToApartment } from '../authentication/authentication';
+import { getPublicLinkForFile } from '../storage/manage_storage';
+import { BankAccount } from '../../dto/bank_account';
+import { getBankAccounts } from '../payment/manage_payment';
+import { GenerateInvoiceParams, generateInvoiceList } from '../invoice-generator/invoice_service';
+import { retrieveUser } from '../user/manage_user';
+import { Invoice, InvoiceItem } from '../../dto/invoice';
 
-export const getWaterBillRequest = async (
-  request: Request,
-  response: Response
-) => {
+export const getWaterBillRequest = async (request: Request, response: Response) => {
   const apartmentId = request.query.apartment_id;
   const companyId = request.query.housing_company_id;
   const year = request.query.year;
   const period = request.query.period;
   if (!apartmentId || !year || !period || !companyId) {
-    response
-      .status(500)
-      .send({
-        errors: { error: "Missing query value", code: "missing_value" },
-      });
+    response.status(500).send({
+      errors: { error: 'Missing query value', code: 'missing_value' },
+    });
     return;
   }
   // @ts-ignore
@@ -45,13 +30,11 @@ export const getWaterBillRequest = async (
   try {
     const apartment = await isAuthorizedAccessToApartment(
       userId,
-      companyId.toString() ?? "",
-      apartmentId?.toString() ?? ""
+      companyId.toString() ?? '',
+      apartmentId?.toString() ?? '',
     );
     if (!apartment) {
-      response
-        .status(403)
-        .send({ errors: { error: "Unauthorized", code: "not_tenant" } });
+      response.status(403).send({ errors: { error: 'Unauthorized', code: 'not_tenant' } });
       return;
     }
     const waterBills = (
@@ -62,38 +45,31 @@ export const getWaterBillRequest = async (
         .collection(APARTMENTS)
         .doc(apartmentId?.toString())
         .collection(WATER_BILLS)
-        .where(YEAR, "==", year)
-        .where(PERIOD, "==", period)
-        .orderBy(CREATED_ON, "desc")
+        .where(YEAR, '==', year)
+        .where(PERIOD, '==', period)
+        .orderBy(CREATED_ON, 'desc')
         .get()
     ).docs.map((doc) => doc.data());
     if (waterBills) {
       response.status(200).send(waterBills);
       return;
     }
-    response
-      .status(500)
-      .send({
-        errors: { error: "Something went wrong", code: "unknown_error" },
-      });
+    response.status(500).send({
+      errors: { error: 'Something went wrong', code: 'unknown_error' },
+    });
   } catch (errors) {
     response.status(500).send({ errors: errors });
   }
 };
-export const getWaterBillByYearRequest = async (
-  request: Request,
-  response: Response
-) => {
+export const getWaterBillByYearRequest = async (request: Request, response: Response) => {
   const apartmentId = request.query.apartment_id;
   const companyId = request.query.housing_company_id;
   const year = request.params.year;
 
   if (!apartmentId || !year || !companyId) {
-    response
-      .status(500)
-      .send({
-        errors: { error: "Missing query value", code: "missing_value" },
-      });
+    response.status(500).send({
+      errors: { error: 'Missing query value', code: 'missing_value' },
+    });
     return;
   }
   // @ts-ignore
@@ -101,13 +77,11 @@ export const getWaterBillByYearRequest = async (
   try {
     const apartment = await isAuthorizedAccessToApartment(
       userId,
-      companyId.toString() ?? "",
-      apartmentId?.toString() ?? ""
+      companyId.toString() ?? '',
+      apartmentId?.toString() ?? '',
     );
     if (!apartment) {
-      response
-        .status(403)
-        .send({ errors: { error: "Unauthorized", code: "not_tenant" } });
+      response.status(403).send({ errors: { error: 'Unauthorized', code: 'not_tenant' } });
       return;
     }
     const waterBills = (
@@ -118,19 +92,17 @@ export const getWaterBillByYearRequest = async (
         .collection(APARTMENTS)
         .doc(apartmentId?.toString())
         .collection(WATER_BILLS)
-        .where(YEAR, "==", parseInt(year))
-        .orderBy(CREATED_ON, "desc")
+        .where(YEAR, '==', parseInt(year))
+        .orderBy(CREATED_ON, 'desc')
         .get()
     ).docs.map((doc) => doc.data());
     if (waterBills) {
       response.status(200).send(waterBills);
       return;
     }
-    response
-      .status(500)
-      .send({
-        errors: { error: "Something went wrong", code: "unknown_error" },
-      });
+    response.status(500).send({
+      errors: { error: 'Something went wrong', code: 'unknown_error' },
+    });
   } catch (errors) {
     console.log(errors);
     response.status(500).send({ errors: errors });
@@ -141,43 +113,40 @@ export const generateLatestWaterBill = async (
   userId: string,
   apartmentId: string,
   companyId: string,
-  consumption: number
+  consumption: number,
 ) => {
-  const waterConsumption = await getLatestWaterConsumption(
-    companyId
-  );
-  const previousPeriodConsumption = await getPreviousWaterConsumptionAfterAddNew(
-    companyId
-  );
+  const waterConsumption = await getLatestWaterConsumption(companyId);
+  const previousPeriodConsumption = await getPreviousWaterConsumptionAfterAddNew(companyId);
   try {
-    const apartment = await isAuthorizedAccessToApartment(
+    const apartment = (await isAuthorizedAccessToApartment(
       userId,
-      companyId.toString() ?? "",
-      apartmentId?.toString() ?? ""
-    ) as Apartment;
+      companyId.toString() ?? '',
+      apartmentId?.toString() ?? '',
+    )) as Apartment;
     if (!apartment) {
       return undefined;
     }
-    const company = await getCompanyData(companyId.toString() ?? "");
+    const company = await getCompanyData(companyId.toString() ?? '');
     //const id = company?.water_bill_template_id;
-    const bankAccounts = await getBankAccounts(companyId.toString() ?? "");
+    const bankAccounts = await getBankAccounts(companyId.toString() ?? '');
     const previousConsumptionValue =
       ((previousPeriodConsumption as WaterConsumption) ?? waterConsumption).consumption_values?.find(
-        (value) => value.apartment_id === apartment.id
+        (value) => value.apartment_id === apartment.id,
       )?.consumption ?? 0;
     const differenceBetweenPeriod = consumption - previousConsumptionValue;
-    const invoiceName = company?.name +
-    ", Apartment " +
-    apartment.building +
-    apartment.house_code +
-    ": Water bill:" +
-    waterConsumption?.period +
-    "/" +
-    waterConsumption?.year;
+    const invoiceName =
+      company?.name +
+      ', Apartment ' +
+      apartment.building +
+      apartment.house_code +
+      ': Water bill:' +
+      waterConsumption?.period +
+      '/' +
+      waterConsumption?.year;
     const invoiceValue =
-    ((waterConsumption?.basic_fee ?? 0) / (company?.apartment_count ?? 1) +
-      (waterConsumption?.price_per_cube ?? 0) * differenceBetweenPeriod) *
-    (1 + (company?.vat ?? 0.10));
+      ((waterConsumption?.basic_fee ?? 0) / (company?.apartment_count ?? 1) +
+        (waterConsumption?.price_per_cube ?? 0) * differenceBetweenPeriod) *
+      (1 + (company?.vat ?? 0.1));
     const invoice = await updateBillTemplate(
       userId,
       company!,
@@ -186,9 +155,9 @@ export const generateLatestWaterBill = async (
       invoiceName,
       differenceBetweenPeriod,
       bankAccounts,
-      apartment
+      apartment,
     );
-    if (!invoice) { 
+    if (!invoice) {
       return undefined;
     }
     /*const link = await generatePdf(
@@ -213,7 +182,7 @@ export const generateLatestWaterBill = async (
       .doc(apartmentId?.toString())
       .collection(WATER_BILLS);
     const waterBillId = waterBillRef.doc().id;
-  
+
     const waterBill = {
       id: waterBillId,
       url: invoice.storage_link,
@@ -221,7 +190,7 @@ export const generateLatestWaterBill = async (
       housing_company_id: companyId,
       apartment_id: apartmentId,
       invoice_value: parseFloat(invoiceValue.toFixed(2)),
-      currency_code: company?.currency_code ?? "",
+      currency_code: company?.currency_code ?? '',
       year: parseInt(waterConsumption?.year),
       period: parseInt(waterConsumption?.period),
       created_on: new Date().getTime(),
@@ -242,43 +211,47 @@ const updateBillTemplate = async (
   invoiceName: string,
   differenceBetweenPeriod: number,
   bankAccounts: BankAccount[],
-  apartment: Apartment
-
-) : Promise<Invoice| undefined> => {
+  apartment: Apartment,
+): Promise<Invoice | undefined> => {
   const user = await retrieveUser(userId);
-  if (!user) { 
+  if (!user) {
     return undefined;
   }
-  if (!user.addresses || user.addresses?.length === 0 ) {
+  if (!user.addresses || user.addresses?.length === 0) {
     user.addresses = [
       {
-        id: "-1",
-        street_address_1: company.address && company.address?.length > 0 ? company.address![0].street_address_1 : apartment.building + ' ' + apartment.house_code,
-        street_address_2: company.address && company.address?.length > 0 ? company.address![0].street_address_2 : apartment.building + ' ' + apartment.house_code,
-        city: company.address && company.address?.length > 0 ? company.address![0].city : "",
-        country: company.address && company.address?.length > 0 ? company.address![0].country : "",
-        postal_code: company.address && company.address?.length > 0 ? company.address![0].postal_code : "",
-        address_type: "billing",
-        owner_id: company.id ?? "",
-        owner_type: "company",
-      }
+        id: '-1',
+        street_address_1:
+          company.address && company.address?.length > 0
+            ? company.address![0].street_address_1
+            : apartment.building + ' ' + apartment.house_code,
+        street_address_2:
+          company.address && company.address?.length > 0
+            ? company.address![0].street_address_2
+            : apartment.building + ' ' + apartment.house_code,
+        city: company.address && company.address?.length > 0 ? company.address![0].city : '',
+        country: company.address && company.address?.length > 0 ? company.address![0].country : '',
+        postal_code: company.address && company.address?.length > 0 ? company.address![0].postal_code : '',
+        address_type: 'billing',
+        owner_id: company.id ?? '',
+        owner_type: 'company',
+      },
     ];
   }
-  
-  const waterPrice =
-     differenceBetweenPeriod * (waterConsumption.price_per_cube ?? 1);
+
+  const waterPrice = differenceBetweenPeriod * (waterConsumption.price_per_cube ?? 1);
   const basicFee = (waterConsumption.basic_fee ?? 1) / (company.apartment_count ?? 1);
-  
-  const invoiceItems : {payment_product_id: string, quantity: number,}[] = []
+
+  const invoiceItems: { payment_product_id: string; quantity: number }[] = [];
   invoiceItems.push({
-    payment_product_id: waterConsumption.basic_fee_product_id ?? "", 
-    quantity: (1 / (company.apartment_count ?? 1)),
+    payment_product_id: waterConsumption.basic_fee_product_id ?? '',
+    quantity: 1 / (company.apartment_count ?? 1),
   });
   invoiceItems.push({
-    payment_product_id: waterConsumption.price_per_cube_product_id ?? "",
+    payment_product_id: waterConsumption.price_per_cube_product_id ?? '',
     quantity: differenceBetweenPeriod,
-  }); 
-  const params : GenerateInvoiceParams = {
+  });
+  const params: GenerateInvoiceParams = {
     userId,
     company,
     invoiceName,
@@ -289,11 +262,11 @@ const updateBillTemplate = async (
     issueExternalInvoice: false,
     items: invoiceItems,
     additionalInvoiceCost: 0,
-  }
+  };
 
   const invoiceList = await generateInvoiceList(params);
   return invoiceList[0];
-  
+
   /*const { google } = require("googleapis");
   const SCOPES = ["https://www.googleapis.com/auth/spreadsheets"];
 
@@ -399,17 +372,17 @@ const updateBillTemplate = async (
 
 const generatePdf = async (templateId: string, fileName: string) => {
   try {
-    const { google } = require("googleapis");
-    const SCOPES = ["https://www.googleapis.com/auth/drive"];
+    const { google } = require('googleapis');
+    const SCOPES = ['https://www.googleapis.com/auth/drive'];
     const auth = new google.auth.GoogleAuth({
       scopes: SCOPES,
-      keyFile: "./service-account-key.json",
+      keyFile: './service-account-key.json',
     });
     const client = await auth.getClient();
-    const googleDriveInstance = google.drive({ version: "v3", auth: client });
+    const googleDriveInstance = google.drive({ version: 'v3', auth: client });
     const res = await googleDriveInstance.files.export(
-      { fileId: templateId, mimeType: "application/pdf", size: "A4" },
-      { responseType: "stream" }
+      { fileId: templateId, mimeType: 'application/pdf', size: 'A4' },
+      { responseType: 'stream' },
     );
     const gs = admin
       .storage()
@@ -418,9 +391,9 @@ const generatePdf = async (templateId: string, fileName: string) => {
       .createWriteStream({
         resumable: false,
         validation: false,
-        contentType: "auto",
+        contentType: 'auto',
         metadata: {
-          "Cache-Control": "public, max-age=31536000",
+          'Cache-Control': 'public, max-age=31536000',
         },
       });
     await res.data.pipe(gs);
@@ -430,31 +403,17 @@ const generatePdf = async (templateId: string, fileName: string) => {
   }
 };
 
-export const getWaterBillLinkRequest = async (
-  request: Request,
-  response: Response
-) => {
+export const getWaterBillLinkRequest = async (request: Request, response: Response) => {
   // @ts-ignore
   const userId = request.user?.uid;
   const waterBillId = request.query.water_bill_id;
   try {
     const waterBill = (
-      await admin
-        .firestore()
-        .collectionGroup(WATER_BILLS)
-        .where("id", "==", waterBillId)
-        .limit(1)
-        .get()
+      await admin.firestore().collectionGroup(WATER_BILLS).where('id', '==', waterBillId).limit(1).get()
     ).docs.map((doc) => doc.data())[0];
-    const apartment = await isAuthorizedAccessToApartment(
-      userId,
-      waterBill.housing_company_id,
-      waterBill.apartment_id
-    );
+    const apartment = await isAuthorizedAccessToApartment(userId, waterBill.housing_company_id, waterBill.apartment_id);
     if (!apartment) {
-      response
-        .status(403)
-        .send({ errors: { message: "Not tenant", code: "not_tenant" } });
+      response.status(403).send({ errors: { message: 'Not tenant', code: 'not_tenant' } });
       return;
     }
     const link = await getPublicLinkForFile(waterBill.url);

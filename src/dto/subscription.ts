@@ -1,4 +1,4 @@
-import { FirebaseObject } from "./firebase_object";
+import { FirebaseObject } from './firebase_object';
 
 export interface Subscription extends FirebaseObject {
   subscription_plan_id: string;

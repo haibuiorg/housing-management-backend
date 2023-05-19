@@ -1,6 +1,6 @@
-import { Request, Response } from "express";
-import { WaterPrice } from "../../dto/water_price";
-import admin from "firebase-admin";
+import { Request, Response } from 'express';
+import { WaterPrice } from '../../dto/water_price';
+import admin from 'firebase-admin';
 // eslint-disable-next-line max-len
 import {
   HOUSING_COMPANIES,
@@ -10,19 +10,13 @@ import {
   HOUSING_COMPANY,
   WATER_CONSUMPTION_MANAGEMENT,
   DEFAULT,
-} from "../../constants";
-import {
-  isCompanyManager,
-  isCompanyTenant,
-} from "../authentication/authentication";
-import { sendTopicNotification } from "../notification/notification_service";
-import { getUserDisplayName } from "../user/manage_user";
-import { addCompanyPaymentProductItem } from "../housing/manage_housing_company";
+} from '../../constants';
+import { isCompanyManager, isCompanyTenant } from '../authentication/authentication';
+import { sendTopicNotification } from '../notification/notification_service';
+import { getUserDisplayName } from '../user/manage_user';
+import { addCompanyPaymentProductItem } from '../housing/manage_housing_company';
 
-export const addNewWaterPrice = async (
-  request: Request,
-  response: Response
-) => {
+export const addNewWaterPrice = async (request: Request, response: Response) => {
   const companyId = request.body.housing_company_id;
   // @ts-ignore
   const userId = request.user?.uid;
@@ -37,13 +31,21 @@ export const addNewWaterPrice = async (
     const basicFee = request.body.basic_fee ?? 0;
     const pricePerCube = request.body.price_per_cube ?? 0;
     const basicFeePaymentProduct = await addCompanyPaymentProductItem(
-      company, "Basic fee", "Basic fee for water consumption", 24, basicFee
-    )
+      company,
+      'Basic fee',
+      'Basic fee for water consumption',
+      24,
+      basicFee,
+    );
     const pricePerCubePaymentProduct = await addCompanyPaymentProductItem(
-      company, "Price per cube", "Price per cube", 24, pricePerCube
-    )
+      company,
+      'Price per cube',
+      'Price per cube',
+      24,
+      pricePerCube,
+    );
     if (!basicFeePaymentProduct || !pricePerCubePaymentProduct) {
-      return response.status(500).send("Error while creating payment product items");
+      return response.status(500).send('Error while creating payment product items');
     }
     const waterPrice: WaterPrice = {
       basic_fee: basicFee,
@@ -51,7 +53,7 @@ export const addNewWaterPrice = async (
       is_active: true,
       id: waterPriceId,
       updated_on: new Date().getTime(),
-      basic_fee_payment_product_item_id:  basicFeePaymentProduct.id,
+      basic_fee_payment_product_item_id: basicFeePaymentProduct.id,
       price_per_cube_payment_product_item_id: pricePerCubePaymentProduct.id,
     };
     try {
@@ -69,20 +71,14 @@ export const addNewWaterPrice = async (
         display_name: distplayName,
         // eslint-disable-next-line max-len
         body:
-          "New water price updated, now total basic fee is: " +
+          'New water price updated, now total basic fee is: ' +
           basicFee +
           company.currency_code?.toUpperCase() +
-          " and price per cube is: " +
+          ' and price per cube is: ' +
           pricePerCube +
           company.currency_code?.toUpperCase(),
-        app_route_location:
-          "/" +
-          HOUSING_COMPANY +
-          "/" +
-          companyId +
-          "/" +
-          WATER_CONSUMPTION_MANAGEMENT,
-        title: "New water price",
+        app_route_location: '/' + HOUSING_COMPANY + '/' + companyId + '/' + WATER_CONSUMPTION_MANAGEMENT,
+        title: 'New water price',
         color: company?.ui?.seed_color,
       });
       response.status(200).send(waterPrice);
@@ -91,15 +87,10 @@ export const addNewWaterPrice = async (
     }
     return;
   }
-  response
-    .status(403)
-    .send({ errors: { error: "Unauthorized", code: "not_manager" } });
+  response.status(403).send({ errors: { error: 'Unauthorized', code: 'not_manager' } });
 };
 
-export const deleteWaterPrice = async (
-  request: Request,
-  response: Response
-) => {
+export const deleteWaterPrice = async (request: Request, response: Response) => {
   const companyId = request.body.housing_company_id;
   // @ts-ignore
   const userId = request.user?.uid;
@@ -123,22 +114,16 @@ export const deleteWaterPrice = async (
     }
     return;
   }
-  response
-    .status(403)
-    .send({ errors: { error: "Unauthorized", code: "not_manager" } });
+  response.status(403).send({ errors: { error: 'Unauthorized', code: 'not_manager' } });
 };
 
-export const getActiveWaterPriceRequest = async (
-  request: Request,
-  response: Response
-) => {
+export const getActiveWaterPriceRequest = async (request: Request, response: Response) => {
   const companyId = request.query.housing_company_id;
   // @ts-ignore
   const userId = request.user?.uid;
   if (
     companyId &&
-    ((await isCompanyTenant(userId, companyId.toString())) ||
-      (await isCompanyManager(userId, companyId.toString())))
+    ((await isCompanyTenant(userId, companyId.toString())) || (await isCompanyManager(userId, companyId.toString())))
   ) {
     try {
       const isHistory = request.query.is_history;
@@ -154,9 +139,7 @@ export const getActiveWaterPriceRequest = async (
     }
     return;
   }
-  response
-    .status(403)
-    .send({ errors: { error: "Unauthorized", code: "not_tenant" } });
+  response.status(403).send({ errors: { error: 'Unauthorized', code: 'not_tenant' } });
 };
 export const getActiveWaterPrice = async (companyId: string) => {
   const waterPrices = (
@@ -165,8 +148,8 @@ export const getActiveWaterPrice = async (companyId: string) => {
       .collection(HOUSING_COMPANIES)
       .doc(companyId.toString())
       .collection(WATER_PRICE)
-      .where(IS_ACTIVE, "==", true)
-      .orderBy(UPDATED_ON, "desc")
+      .where(IS_ACTIVE, '==', true)
+      .orderBy(UPDATED_ON, 'desc')
       .limit(1)
       .get()
   ).docs.map((doc) => doc.data());
@@ -180,7 +163,7 @@ export const getWaterPriceHistory = async (companyId: string) => {
       .collection(HOUSING_COMPANIES)
       .doc(companyId.toString())
       .collection(WATER_PRICE)
-      .orderBy(UPDATED_ON, "asc")
+      .orderBy(UPDATED_ON, 'asc')
       .get()
   ).docs.map((doc) => doc.data());
   return waterPrices;

@@ -1,15 +1,18 @@
-export const PRIORLI_INVITATION_EMAIL_SCREENSHOT_LINKS: string[] = 
-  [
-    'https://firebasestorage.googleapis.com/v0/b/priorli.appspot.com/o/public%2Fscreenshots%2FPriorli%20(500%20%C3%97%20300px)%20(Presentation%20(169))%20(2).png?alt=media&token=338391a1-3824-41c2-8482-7b343069c996',
-    'https://firebasestorage.googleapis.com/v0/b/priorli.appspot.com/o/public%2Fscreenshots%2FPriorli%20(500%20%C3%97%20300px)%20(Presentation%20(169))%20(3).png?alt=media&token=6309b621-07b3-4262-b8bb-d25d61ff51a1'
-  ];
-export const invitationEmail = (language: string, 
-    signUpLink: string, 
-    secretCode: string, 
-    companyName: string, 
-    priorliLogo: string, 
-    companyLogo?: string, 
-    screenshots?: string[]) => language === 'en' ? `<!DOCTYPE html>
+export const PRIORLI_INVITATION_EMAIL_SCREENSHOT_LINKS: string[] = [
+  'https://firebasestorage.googleapis.com/v0/b/priorli.appspot.com/o/public%2Fscreenshots%2FPriorli%20(500%20%C3%97%20300px)%20(Presentation%20(169))%20(2).png?alt=media&token=338391a1-3824-41c2-8482-7b343069c996',
+  'https://firebasestorage.googleapis.com/v0/b/priorli.appspot.com/o/public%2Fscreenshots%2FPriorli%20(500%20%C3%97%20300px)%20(Presentation%20(169))%20(3).png?alt=media&token=6309b621-07b3-4262-b8bb-d25d61ff51a1',
+];
+export const invitationEmail = (
+  language: string,
+  signUpLink: string,
+  secretCode: string,
+  companyName: string,
+  priorliLogo: string,
+  companyLogo?: string,
+  screenshots?: string[],
+) =>
+  language === 'en'
+    ? `<!DOCTYPE html>
   <!DOCTYPE html>
   <html>
     <head>
@@ -23,7 +26,11 @@ export const invitationEmail = (language: string,
             <table cellpadding="0" cellspacing="0" width="100%">
               <tr>
                 <td align="center" style="padding-bottom: 20px;">
-                  ${companyLogo ? `<img src="${companyLogo}" alt="Company Logo" style="height: 100px;">`: `<img src="${priorliLogo}" alt="Priorli Logo" style="height: 100px;">`}
+                  ${
+                    companyLogo
+                      ? `<img src="${companyLogo}" alt="Company Logo" style="height: 100px;">`
+                      : `<img src="${priorliLogo}" alt="Priorli Logo" style="height: 100px;">`
+                  }
                 </td>
               </tr>
               <tr>
@@ -50,9 +57,13 @@ export const invitationEmail = (language: string,
                   <p>In addition, you will be able to view your water usage reports and generate invoices for water usage and other services on Priorli, making it easier than ever to keep track of your bills and payments.</p>
                   <p>Check out some screenshots of Priorli below:</p>
                   <p style="text-align: center;">
-                    ${screenshots?.map((screenshot) => `
+                    ${screenshots
+                      ?.map(
+                        (screenshot) => `
                       <img src="${screenshot}" alt="Screenshot" style="max-width: 100%; height: auto; margin-bottom: 10px;">
-                    `).join('')}
+                    `,
+                      )
+                      .join('')}
                   </p>
                   <p>If you have any questions or concerns, please don't hesitate to contact us at contact@priorli.com.</p>
   <p>We hope you enjoy using Priorli!</p>
@@ -67,7 +78,8 @@ export const invitationEmail = (language: string,
   
     </body>
   </html>
-  `: `<!DOCTYPE html>
+  `
+    : `<!DOCTYPE html>
   <html>
     <head>
       <meta charset="UTF-8">
@@ -80,7 +92,11 @@ export const invitationEmail = (language: string,
             <table cellpadding="0" cellspacing="0" width="100%">
               <tr>
               <td align="center" style="padding-bottom: 20px;">
-              ${companyLogo ? `<img src="${companyLogo}" alt="Company Logo" style="height: 100px;">`: `<img src="${priorliLogo}" alt="Priorli Logo" style="height: 100px;">`}
+              ${
+                companyLogo
+                  ? `<img src="${companyLogo}" alt="Company Logo" style="height: 100px;">`
+                  : `<img src="${priorliLogo}" alt="Priorli Logo" style="height: 100px;">`
+              }
             </td>
               </tr>
               <tr>
@@ -107,9 +123,13 @@ export const invitationEmail = (language: string,
   <p>Lisäksi voit Priorlin avulla nähdä vedenkulutusraporttisi ja generoida laskuja vedenkulutuksesta ja muista palveluista, mikä tekee laskujen ja maksujen seurannasta helpompaa kuin koskaan.</p>
   <p>Tässä muutama näyttökuvakaappaus Priorlista:</p>
   <p style="text-align: center;">
-                    ${screenshots?.map((screenshot) => `
+                    ${screenshots
+                      ?.map(
+                        (screenshot) => `
                       <img src="${screenshot}" alt="Screenshot" style="max-width: 100%; height: auto; margin-bottom: 10px;">
-                    `).join('')}
+                    `,
+                      )
+                      .join('')}
                   </p>
   <p>Jos sinulla on kysyttävää tai huolenaiheita, älä epäröi ottaa yhteyttä meihin osoitteessa contact@priorli.com.</p>
   <p>Toivomme, että nautit Priorlin käytöstä!</p>
@@ -128,13 +148,16 @@ export const invitationEmail = (language: string,
 
 export const marketingEmail = (
   language: string = 'fi',
-  promoCode: string, 
-  senderName: string, 
+  promoCode: string,
+  senderName: string,
   contactEmail: string,
-  priorliLogo: string, 
+  priorliLogo: string,
   priorliWebsite: string,
   contactFormLink: string,
-  screenshots?: string[] ) => language  === 'en' ? `
+  screenshots?: string[],
+) =>
+  language === 'en'
+    ? `
   <!DOCTYPE html>
   <html>
     <head>
@@ -158,9 +181,13 @@ export const marketingEmail = (
                   <p>Priorli is a centralized platform that helps housing management save time, reduce costs, and enhance stakeholder satisfaction. Our user-friendly interface streamlines the housing management process, allowing you to focus on what really matters - providing the best living experience for your tenants.</p>
                   <p>To give you an idea of what Priorli can offer, we have included two screenshots of our software below. Our solution is mobile-optimized, meaning you can manage your properties anywhere, anytime.</p>
                   <p style="text-align: center;">
-                    ${screenshots?.map((screenshot) => `
+                    ${screenshots
+                      ?.map(
+                        (screenshot) => `
                       <img src="${screenshot}" alt="Screenshot" style="max-width: 100%; height: auto; margin-bottom: 10px;">
-                    `).join('')}
+                    `,
+                      )
+                      .join('')}
                   </p>
                   <p>We are committed to providing expert support, so if you have any questions or want to learn more about our solution, don't hesitate to contact us at  or use our contact form at ${contactFormLink}.</p>
                   <p>We want to offer something special to our early customers. That's why we are giving you an exclusive promo code that will give you six months free of our annual subscription package. Just enter the code ${promoCode} in the contact form to redeem the offer.</p>
@@ -177,7 +204,8 @@ export const marketingEmail = (
       </table>
     </body>
   </html>
-` : `
+`
+    : `
 <!DOCTYPE html>
 <html>
   <head>
@@ -201,9 +229,13 @@ export const marketingEmail = (
                 <p>Priorli on keskitetty alusta, joka auttaa asuntojen hallintaa säästämään aikaa, vähentämään kustannuksia ja parantamaan osakkeenomistajien tyytyväisyyttä. Käyttäjäystävällinen käyttöliittymämme helpottaa asuntojen hallinnan prosessia, jolloin voit keskittyä siihen, mikä todella merkitsee - tarjota parhaan asumiskokemuksen asukkaillesi.</p>
                 <p>Antaaksemme sinulle käsityksen siitä, mitä Priorli voi tarjota, olemme sisällyttäneet alla oleviin kahteen kuvakaappaukseen ohjelmistostamme. Ratkaisumme on mobiilioptimoitu, mikä tarkoittaa, että voit hallita asuntoja missä tahansa ja milloin tahansa.</p>
                 <p style="text-align: center;">
-                ${screenshots?.map((screenshot) => `
+                ${screenshots
+                  ?.map(
+                    (screenshot) => `
                   <img src="${screenshot}" alt="Screenshot" style="max-width: 100%; height: auto; margin-bottom: 10px;">
-                `).join('')}
+                `,
+                  )
+                  .join('')}
               </p>
                 <p>Olemme sitoutunet tarjoamaan asiantuntevaa tukea, joten jos sinulla on kysyttävää tai haluat tietää lisää ratkaisustamme, älä epäröi ottaa meihin yhteyttä sähköpostitse osoitteessa <a href="${contactEmail}">${contactEmail}</a> tai käyttää yhteydenottolomakettamme osoitteessa ${contactFormLink}.</p>
                 <p>Haluamme tarjota jotain erityistä ensimmäisille asiakkaillemme. Siksi tarjoamme sinulle yksinoikeudellisen promo-koodin, joka antaa sinulle kuusi kuukautta ilmaiseksi vuosittaisesta tilauspaketistamme. Syötä vain koodi ${promoCode} yhteydenottolomakkeessa lunastaaksesi tarjouksen.</p>
