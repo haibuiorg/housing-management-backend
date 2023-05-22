@@ -106,7 +106,7 @@ export const deleteCompanyBankAccountRequest = async (request: Request, response
   }
 };
 
-export const getBankAccounts = async (housingCompanyId: String, isDeleted?: boolean) => {
+export const getBankAccounts = async (housingCompanyId: string, isDeleted?: boolean) => {
   if (isDeleted) {
     const bankAccountData = await admin
       .firestore()

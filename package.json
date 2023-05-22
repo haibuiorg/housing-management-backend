@@ -37,7 +37,7 @@
     "googleapis": "^109.0.1",
     "hnswlib-node": "^1.4.2",
     "joi": "^17.7.0",
-    "langchain": "^0.0.76",
+    "langchain": "^0.0.78",
     "node-fs": "^0.1.7",
     "openai": "^3.2.1",
     "pdf-parse": "^1.1.1",
@@ -67,5 +67,5 @@
     "hooks": {
       "pre-commit": "yarn lint"
     }
-}
+  }
 }

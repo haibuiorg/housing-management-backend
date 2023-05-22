@@ -15,6 +15,7 @@ import { User } from '../../dto/user';
 import { Invoice } from '../../dto/invoice';
 import { updateInvoiceStatus } from '../invoice-generator/invoice_service';
 
+// eslint-disable-next-line @typescript-eslint/no-var-requires
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 
 export const addPaymentCustomerAccount = async (email: string, name?: string, phone?: string) => {
@@ -128,6 +129,7 @@ export const createInvoiceForCompanyCustomer = async (
         currency: item.payment_product_item.currency,
         quantity: item.quantity,
         description: item.payment_product_item.description,
+
       });
     }),
   );
@@ -313,12 +315,12 @@ export const retrieveCheckOutSession = async (sessionId: string) => {
   return session;
 };
 
-export const retrieveSubscriptionDetail = async (subscriptionId: String) => {
+export const retrieveSubscriptionDetail = async (subscriptionId: string) => {
   const subscription = await stripe.subscriptions.retrieve(subscriptionId);
   return subscription;
 };
 
-export const retrieveInvoiceDetail = async (invoiceId: String) => {
+export const retrieveInvoiceDetail = async (invoiceId: string) => {
   const invoice = await stripe.invoices.retrieve(invoiceId);
   return invoice;
 };

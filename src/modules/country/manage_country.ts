@@ -2,7 +2,6 @@ import { Request, Response } from 'express';
 import admin from 'firebase-admin';
 import { COUNTRIES, COUNTRY_CODE, IS_ACTIVE, LEGAL_DOCUMENTS } from '../../constants';
 import { Country } from '../../dto/country';
-import { request } from 'http';
 import { LegalDocument } from '../../dto/legal_document';
 import { getPublicLinkForFile } from '../storage/manage_storage';
 
@@ -80,10 +79,7 @@ export const getCountryLegalDocumentsRequest = async (request: Request, response
   }
 };
 
-const getLegalDocuments = async (
-  countryCode: string,
-  onlyActive: boolean = true,
-): Promise<LegalDocument[] | undefined> => {
+const getLegalDocuments = async (countryCode: string, onlyActive = true): Promise<LegalDocument[] | undefined> => {
   try {
     let documentRef = admin
       .firestore()

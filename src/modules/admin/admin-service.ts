@@ -15,7 +15,7 @@ import { isAdminRole } from '../authentication/authentication';
 import { addStripeProduct, addStripeSubscriptionProduct } from '../payment-externals/payment-service';
 import { PaymentProductItem } from '../../dto/payment-product-item';
 import { getCountryData } from '../country/manage_country';
-import { addReferenceDoc, createPineconeIndex } from '../chat-helper/chat-helper-service';
+import { addReferenceDoc, createPineconeIndex, getPineconeIndexes } from '../chat-helper/chat-helper-service';
 import { copyStorageFolder } from '../storage/manage_storage';
 import { StorageItem } from '../../dto/storage_item';
 
@@ -242,11 +242,8 @@ export const addStorageLinkReferenceDocument = async (request: Request, response
     response.sendStatus(403);
     return;
   }
-  const { storage_links, doc_type, language_code } = request.body;
-  let index_name = 'housing-company-generic';
-  if (doc_type === 'housing-company-generic') {
-    index_name = 'housing-company-generic';
-  }
+  const { storage_links, doc_type, language_code, index_name } = request.body;
+
   try {
     const storageItems: StorageItem[] = [];
     await Promise.all(
@@ -298,4 +295,16 @@ export const createDocumentIndex = async (request: Request, response: Response) 
     console.log(error);
     response.sendStatus(500);
   }
+};
+
+export const getReferenceDocIndexList = async (request: Request, response: Response) => {
+  // @ts-ignore
+  const userId = request.user.uid;
+  const isAdmin = await isAdminRole(userId);
+  if (!isAdmin) {
+    response.sendStatus(403);
+    return;
+  }
+  const indexList = await getPineconeIndexes();
+  response.send(indexList);
 };

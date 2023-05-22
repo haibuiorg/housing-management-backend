@@ -1,24 +1,32 @@
 import { Request, Response } from 'express';
-import { createUserWithEmail } from '../authentication/register';
+import { createUserAnonymous, createUserWithEmail } from '../authentication/register';
 import { getSupportedContries } from '../country/manage_country';
-import admin from 'firebase-admin';
+import admin, { auth } from 'firebase-admin';
 import { CONVERSATIONS, COUNTRY_CODE, LANGUAGE_CODE, SUPPORT_CHANNELS, SUPPORT_MESSAGE_TYPE } from '../../constants';
 import { Conversation } from '../../dto/conversation';
 
-export const startNewConversationRequest = async (request: Request, response: Response) => {
+export const startNewChatbotRequest = async (request: Request, response: Response) => {
   const { email, country_code, language_code, first_name, last_name, conversation_name, phone } = request.body;
   const supportedCountries = await getSupportedContries();
-  if (supportedCountries?.includes(country_code) !== true) {
+  console.log('Supported countries: ' + supportedCountries);
+  console.log('Country code: ' + country_code);
+  console.log('conversation_name: ' + conversation_name);
+  if (!supportedCountries?.find((country) => country.country_code === country_code)) {
     response.status(500).send({ errors: { code: 500, message: 'Invalid country code' } });
     return;
   }
 
-  const user = await createUserWithEmail(email, country_code, first_name, last_name, phone);
+  const user = email
+    ? await createUserWithEmail(email, country_code, first_name, last_name, phone)
+    : await createUserAnonymous(country_code, first_name, last_name, phone);
+
   if (!user) {
     response.status(500).send({ errors: { code: 500, message: 'Invalid user info' } });
     return;
   }
+
   try {
+    const token = await auth().createCustomToken(user.user_id);
     let channelId = request.body.channel_id?.toString() ?? '';
     if (channelId.length === 0) {
       const countryCode = country_code ?? 'fi';
@@ -68,6 +76,6 @@ export const startNewConversationRequest = async (request: Request, response: Re
       .collection(CONVERSATIONS)
       .doc(conversationId)
       .set(conversation);
-    response.status(200).send(conversation);
+    response.status(200).send({ conversation, token });
   } catch (error) {}
 };

@@ -168,3 +168,15 @@ export const getWaterPriceHistory = async (companyId: string) => {
   ).docs.map((doc) => doc.data());
   return waterPrices;
 };
+
+export const getWaterPriceById = async (id: string): Promise<WaterPrice | undefined> => {
+  try {
+    const waterPrice = (
+      await admin.firestore().collectionGroup(WATER_PRICE).where('id', '==', id).limit(1).get()
+    ).docs.map((doc) => doc.data())[0];
+    return waterPrice as WaterPrice;
+  } catch (error) {
+    console.log(error);
+    return;
+  }
+};

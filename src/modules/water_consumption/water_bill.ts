@@ -12,7 +12,8 @@ import { BankAccount } from '../../dto/bank_account';
 import { getBankAccounts } from '../payment/manage_payment';
 import { GenerateInvoiceParams, generateInvoiceList } from '../invoice-generator/invoice_service';
 import { retrieveUser } from '../user/manage_user';
-import { Invoice, InvoiceItem } from '../../dto/invoice';
+import { Invoice } from '../../dto/invoice';
+import { getWaterPriceById } from './manage_water_price';
 
 export const getWaterBillRequest = async (request: Request, response: Response) => {
   const apartmentId = request.query.apartment_id;
@@ -143,11 +144,8 @@ export const generateLatestWaterBill = async (
       waterConsumption?.period +
       '/' +
       waterConsumption?.year;
-    const invoiceValue =
-      ((waterConsumption?.basic_fee ?? 0) / (company?.apartment_count ?? 1) +
-        (waterConsumption?.price_per_cube ?? 0) * differenceBetweenPeriod) *
-      (1 + (company?.vat ?? 0.1));
-    const invoice = await updateBillTemplate(
+
+    const invoices = await updateBillTemplate(
       userId,
       company!,
       waterConsumption as WaterConsumption,
@@ -157,7 +155,7 @@ export const generateLatestWaterBill = async (
       bankAccounts,
       apartment,
     );
-    if (!invoice) {
+    if (!invoices) {
       return undefined;
     }
     /*const link = await generatePdf(
@@ -182,10 +180,12 @@ export const generateLatestWaterBill = async (
       .doc(apartmentId?.toString())
       .collection(WATER_BILLS);
     const waterBillId = waterBillRef.doc().id;
-
+    const invoiceValue =
+      (waterConsumption?.basic_fee ?? 0) / (company?.apartment_count ?? 1) +
+      (waterConsumption?.price_per_cube ?? 0) * differenceBetweenPeriod;
     const waterBill = {
       id: waterBillId,
-      url: invoice.storage_link,
+      url: invoices[0].storage_link,
       consumption: differenceBetweenPeriod,
       housing_company_id: companyId,
       apartment_id: apartmentId,
@@ -212,7 +212,7 @@ const updateBillTemplate = async (
   differenceBetweenPeriod: number,
   bankAccounts: BankAccount[],
   apartment: Apartment,
-): Promise<Invoice | undefined> => {
+): Promise<Invoice[] | undefined> => {
   const user = await retrieveUser(userId);
   if (!user) {
     return undefined;
@@ -238,17 +238,24 @@ const updateBillTemplate = async (
       },
     ];
   }
+  const waterPrice = await getWaterPriceById(waterConsumption.price_id ?? '');
+  if (
+    !waterPrice ||
+    !waterPrice.basic_fee_payment_product_item_id ||
+    !waterPrice.price_per_cube_payment_product_item_id
+  ) {
+    return undefined;
+  }
 
-  const waterPrice = differenceBetweenPeriod * (waterConsumption.price_per_cube ?? 1);
-  const basicFee = (waterConsumption.basic_fee ?? 1) / (company.apartment_count ?? 1);
-
+  const basicFeeId = waterPrice?.basic_fee_payment_product_item_id ?? '';
+  const pricePerCubeId = waterPrice?.price_per_cube_payment_product_item_id ?? '';
   const invoiceItems: { payment_product_id: string; quantity: number }[] = [];
   invoiceItems.push({
-    payment_product_id: waterConsumption.basic_fee_product_id ?? '',
+    payment_product_id: basicFeeId ?? '',
     quantity: 1 / (company.apartment_count ?? 1),
   });
   invoiceItems.push({
-    payment_product_id: waterConsumption.price_per_cube_product_id ?? '',
+    payment_product_id: pricePerCubeId ?? '',
     quantity: differenceBetweenPeriod,
   });
   const params: GenerateInvoiceParams = {
@@ -265,7 +272,7 @@ const updateBillTemplate = async (
   };
 
   const invoiceList = await generateInvoiceList(params);
-  return invoiceList[0];
+  return invoiceList;
 
   /*const { google } = require("googleapis");
   const SCOPES = ["https://www.googleapis.com/auth/spreadsheets"];
@@ -372,6 +379,7 @@ const updateBillTemplate = async (
 
 const generatePdf = async (templateId: string, fileName: string) => {
   try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
     const { google } = require('googleapis');
     const SCOPES = ['https://www.googleapis.com/auth/drive'];
     const auth = new google.auth.GoogleAuth({

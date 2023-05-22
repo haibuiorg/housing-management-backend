@@ -1,11 +1,12 @@
 import PDFDocument from 'pdfkit';
 import { Invoice } from '../../dto/invoice';
-import { User } from '../../dto/user';
 import { Company } from '../../dto/company';
 import { Writable } from 'stream';
 import { BankAccount } from '../../dto/bank_account';
 import { Address } from '../../dto/address';
+// eslint-disable-next-line @typescript-eslint/no-var-requires
 const codes = require('rescode');
+// eslint-disable-next-line @typescript-eslint/no-var-requires
 const axios = require('axios').default;
 const fetchImage = async (src: string) => {
   try {
@@ -50,8 +51,7 @@ const generateHeader = async (doc: PDFKit.PDFDocument, company: Company) => {
     .fontSize(10)
     .text(
       // eslint-disable-next-line max-len
-      `${company.street_address_1 ?? ''} ${company.street_address_2 ?? ''}, ${company.postal_code ?? ''}, ${
-        company.city ?? ''
+      `${company.street_address_1 ?? ''} ${company.street_address_2 ?? ''}, ${company.postal_code ?? ''}, ${company.city ?? ''
       }`,
       200,
       65,
@@ -112,8 +112,8 @@ const generateInvoiceTable = (doc: PDFKit.PDFDocument, invoice: Invoice) => {
     invoiceTableTop,
     'Name',
     'Description',
-    'Unit Cost',
-    'Quantity',
+    'Price',
+    'Qty',
     'Incld. Tax (%)',
     'Line Total',
   );
@@ -132,7 +132,7 @@ const generateInvoiceTable = (doc: PDFKit.PDFDocument, invoice: Invoice) => {
         invoice.currency_code,
         item.payment_product_item.amount / (1 + item.payment_product_item.tax_percentage / 100),
       ),
-      item.quantity.toFixed(0),
+      item.quantity.toFixed(3),
       (item.payment_product_item.tax_percentage ?? 0).toFixed(2),
       formatCurrency(invoice.currency_code, item.payment_product_item.amount),
     );
@@ -226,7 +226,7 @@ const generateTableRow = (
   doc
     .fontSize(10)
     .text(item, 50, y)
-    .text(description, 150, y)
+    .text(description.substring(0, 20), 150, y)
     .text(unitCost, 250, y, { width: 90, align: 'right' })
     .text(quantity, 290, y, { width: 90, align: 'right' })
     .text(taxPercentage, 380, y, { width: 90, align: 'right' })

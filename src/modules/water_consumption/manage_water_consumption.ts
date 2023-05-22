@@ -105,6 +105,7 @@ export const addConsumptionValue = async (request: Request, response: Response) 
       consumptionValue.house_code = houseCode;
     }
     try {
+      const waterBill = await generateLatestWaterBill(userId, apartment.id ?? '', housingCompanyId, consumption);
       await admin
         .firestore()
         .collection(HOUSING_COMPANIES)
@@ -114,7 +115,6 @@ export const addConsumptionValue = async (request: Request, response: Response) 
         .collection(CONSUMPTION_VALUE)
         .doc(apartment.id ?? '')
         .set(consumptionValue);
-      const waterBill = await generateLatestWaterBill(userId, apartment.id ?? '', housingCompanyId, consumption);
       response.status(200).send(waterBill);
     } catch (errors) {
       console.log(errors);
@@ -259,6 +259,7 @@ export const getPreviousWaterConsumptionAfterAddNew = async (companyId: string) 
       .limit(1)
       .get()
   ).docs.map((doc) => doc.data())[0];
+  console.log('waterConsumption', waterConsumption);
   if (waterConsumption) {
     const consumptionValues = await getAllConsumptionValue(companyId, waterConsumption.id);
     waterConsumption.consumption_values = consumptionValues;

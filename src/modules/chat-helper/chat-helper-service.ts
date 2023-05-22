@@ -7,6 +7,8 @@ import { RecursiveCharacterTextSplitter } from 'langchain/text_splitter';
 import admin from 'firebase-admin';
 import { PDFLoader } from 'langchain/document_loaders/fs/pdf';
 import { PineconeStore } from 'langchain/vectorstores/pinecone';
+import { SerpAPI, ChainTool } from 'langchain/tools';
+import { initializeAgentExecutorWithOptions } from 'langchain/agents';
 import os from 'os';
 
 export const askQuestion = async (
@@ -128,6 +130,21 @@ export const updatePinecone = async (indexName: string, rawDocs: Document[], doc
   console.log('finished creating vector store');
 };
 
+export const getPineconeIndexes = async (): Promise<string[]> => {
+  try {
+    const pinecone = new PineconeClient();
+    await pinecone.init({
+      apiKey: process.env.PINECONE_API_KEY ?? '',
+      environment: process.env.PINECONE_ENVIRONMENT ?? '',
+    });
+    const existingIndexes = await pinecone.listIndexes();
+    return existingIndexes;
+  } catch (err) {
+    console.log(err);
+  }
+  return [];
+};
+
 export const createPineconeIndex = async (indexName: string, vectorDimension = 1536) => {
   const pinecone = new PineconeClient();
   await pinecone.init({
@@ -208,14 +225,18 @@ const queryPineconeVectorStoreAndQueryLLM = async (
     });
 
     //create chain
-    const chain = makeChain(vectorStore);
+    const executor = await makeExecutor(vectorStore);
+    console.log('executor', 'executor created');
+    const response = await executor?.call({ input: sanitizedQuestion });
+
     //Ask a question using chat history
-    const response = await chain.call({
+    /*const response = await chain.call({
       question: sanitizedQuestion,
       chat_history,
-    });
+    });*/
+    console.log('response', response?.output.toString());
 
-    return response.text.toString().replaceAll('\n', '').trim();
+    return response?.output;
   } catch (error) {
     console.log('error', error);
     return;
@@ -238,16 +259,38 @@ If the question is not related to the context, politely respond that you are tun
 Question: {question}
 Helpful answer in markdown:`;
 
-const makeChain = (vectorstore: PineconeStore) => {
+const makeExecutor = async (vectorstore: PineconeStore) => {
   const model = new OpenAI({
-    temperature: 0, // increase temepreature to get more creative answers
+    temperature: 0.3, // increase temepreature to get more creative answers
     modelName: 'gpt-3.5-turbo', //change this to gpt-4 if you have access
   });
-
   const chain = ConversationalRetrievalQAChain.fromLLM(model, vectorstore.asRetriever(), {
     qaTemplate: QA_PROMPT,
+
     questionGeneratorTemplate: CONDENSE_PROMPT,
     returnSourceDocuments: true, //The number of source documents returned is 4 by default
   });
-  return chain;
+  const qaTool = new ChainTool({
+    name: 'housing-association-qa',
+    description:
+      'Housing association or housing company QA - useful for when you need to ask questions about housing association.',
+    chain: chain,
+    returnDirect: true,
+  });
+  const tools = [
+    new SerpAPI(process.env.SERP_API_KEY, {
+      location: 'Austin,Texas,United States',
+      hl: 'en',
+      gl: 'us',
+    }),
+    qaTool,
+  ];
+  try {
+    const executor = await initializeAgentExecutorWithOptions(tools, model, {
+      agentType: 'chat-conversational-react-description',
+    });
+    return executor;
+  } catch (e) {}
+
+  return;
 };

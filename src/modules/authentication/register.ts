@@ -2,15 +2,14 @@ import admin from 'firebase-admin';
 import { isValidEmail } from '../../strings_utils';
 import { sendVerificationEmail } from '../email/email_module';
 import { Request, Response } from 'express';
-import { codeValidation, removeCode } from './code_validation';
+import { codeValidation } from './code_validation';
 import { DEFAULT, USERS } from '../../constants';
 import { addTenantToApartment } from '../housing/manage_apartment';
 import crypto from 'crypto';
 import { User } from '../../dto/user';
 import { addPaymentCustomerAccount } from '../payment-externals/payment-service';
-import { Apartment } from '../../dto/apartment';
-import { getSupportedContries, isValidCountryCode } from '../country/manage_country';
 import { getCompanyData } from '../housing/manage_housing_company';
+import { isValidCountryCode } from '../country/manage_country';
 
 const generatePassword = (
   length = 20,
@@ -43,7 +42,7 @@ export const registerWithCode = async (request: Request, response: Response) => 
       emailVerified: false,
     });
     const paymentCustomer = await addPaymentCustomerAccount(email);
-    const company = await getCompanyData(apartment.housing_company_id!);
+    const company = await getCompanyData(apartment.housing_company_id ?? '');
     const user = await createUserOnFirestore(
       userRecord.uid,
       company?.country_code ?? 'fi',
@@ -51,7 +50,7 @@ export const registerWithCode = async (request: Request, response: Response) => 
       [DEFAULT],
       paymentCustomer.id,
     );
-    await addTenantToApartment(userRecord.uid, apartment.housing_company_id!, apartment.id!, invitationCode);
+    await addTenantToApartment(userRecord.uid, apartment.housing_company_id ?? '', apartment.id ?? '', invitationCode);
 
     response.status(200).send(user);
     sendVerificationEmail(email);
@@ -129,6 +128,8 @@ export const createUserWithEmail = async (
       email: email,
       password: pass,
       emailVerified: false,
+      phoneNumber: phone,
+      displayName: firstName + ' ' + lastName,
     });
 
     const user = await createUserOnFirestore(
@@ -146,15 +147,43 @@ export const createUserWithEmail = async (
   }
 };
 
+export const createUserAnonymous = async (
+  countryCode: string,
+  firstName?: string,
+  lastName?: string,
+  phone?: string,
+): Promise<User | undefined> => {
+  try {
+    const userRecord = await admin.auth().createUser({
+      emailVerified: false,
+      phoneNumber: phone,
+      displayName: firstName + ' ' + lastName,
+    });
+
+    const user = await createUserOnFirestore(
+      userRecord.uid,
+      countryCode,
+      '',
+      [DEFAULT],
+      firstName ?? '',
+      lastName ?? '',
+      phone ?? '',
+    );
+    return user;
+  } catch (errors) {
+    return undefined;
+  }
+};
+
 export const createUserOnFirestore = async (
   userUid: string,
   countryCode: string,
   email: string,
   roles: string[],
   paymentCustomerId: string,
-  firstName: string = '',
-  lastName: string = '',
-  phone: string = '',
+  firstName = '',
+  lastName = '',
+  phone = '',
 ) => {
   const createdOn = new Date().getTime();
   const user = {

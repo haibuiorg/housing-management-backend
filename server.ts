@@ -31,7 +31,7 @@ import {
   registerWithCode,
   register,
 } from "./src/modules/authentication/register";
-import { validateFirebaseIdToken } from "./src/modules/authentication/authentication";
+import { validateFirebaseIdToken, validateIdTokenAllowAnonymous } from "./src/modules/authentication/authentication";
 
 import {
   addConsumptionValue,
@@ -163,15 +163,19 @@ import {
   getAllCompanies,
   getContactLeadListRequest,
   getPaymentProductItems,
+  getReferenceDocIndexList,
   updateContactLeadStatus,
 } from "./src/modules/admin/admin-service";
+import { startNewChatbotRequest } from "./src/modules/contact/public-chat-service";
 
 const serviceAccountPath = process.env.SERVICE_ACCOUNT_PATH;
 const serviceAccount = require(serviceAccountPath!);
-admin.initializeApp({
+const adminApp = admin.initializeApp({
   credential: admin.credential.cert(serviceAccount),
   storageBucket: "priorli.appspot.com",
 });
+const firestore = adminApp.firestore();
+firestore.settings({ ignoreUndefinedProperties: true });
 
 const jsonParser = bodyParser.json();
 
@@ -209,22 +213,21 @@ router.get(
 );
 router.get(
   "/country/:country_code/legal_documents",
-  validateFirebaseIdToken,
   getCountryLegalDocumentsRequest
 );
 router.post("/register", register);
 router.post("/reset_password", sendPasswordResetEmail);
 
-router.get("/user", validateFirebaseIdToken, getUserData);
-router.patch("/user", validateFirebaseIdToken, updateUserData);
+router.get("/user", validateIdTokenAllowAnonymous, getUserData);
+router.patch("/user", validateIdTokenAllowAnonymous, updateUserData);
 router.patch(
   "/user/notification_token",
-  validateFirebaseIdToken,
+  validateIdTokenAllowAnonymous,
   addUserNotificationToken
 );
 router.delete(
   "/user/notification_token",
-  validateFirebaseIdToken,
+  validateIdTokenAllowAnonymous,
   deleteNotificationToken
 );
 router.patch("/change_password", validateFirebaseIdToken, changeUserPassword);
@@ -380,24 +383,24 @@ router.patch(
 );
 
 // router.post('/test_notification', sendNotificationTest);
-
-router.post("/message", validateFirebaseIdToken, sendMessage);
+// allow anonymous for chatbot
+router.post("/message", validateIdTokenAllowAnonymous, sendMessage);
 router.post(
   "/start_conversation",
-  validateFirebaseIdToken,
+  validateIdTokenAllowAnonymous,
   startNewConversationRequest
 );
 router.put(
   "/join_conversation",
-  validateFirebaseIdToken,
+  validateIdTokenAllowAnonymous,
   joinConversationRequest
 );
 router.put(
   "/seen_conversation",
-  validateFirebaseIdToken,
+  validateIdTokenAllowAnonymous,
   setConversationSeenRequest
 );
-router.get("/conversation", validateFirebaseIdToken, getConversationRequest);
+router.get("/conversation", validateIdTokenAllowAnonymous, getConversationRequest);
 
 router.post(
   "/housing_company/documents",
@@ -549,9 +552,12 @@ router.put(
 router.get("/admin/companies", validateFirebaseIdToken, getAllCompanies);
 router.post("/admin/add_reference_doc", validateFirebaseIdToken, addStorageLinkReferenceDocument);
 router.post("/admin/add_index", validateFirebaseIdToken, createDocumentIndex);
+router.get("/admin/reference_indexes", validateFirebaseIdToken, getReferenceDocIndexList);
 router.post("/admin/payment_product", validateFirebaseIdToken, addPaymentProductItem);
 router.delete("/admin/payment_product", validateFirebaseIdToken, deletePaymentProductItem);
 router.get("/payment_products", validateFirebaseIdToken, getPaymentProductItems);
+
+router.post("/chatbot", startNewChatbotRequest);
 
 app.get("/", (req, res) => {
   res.status(404).send("Hello priorli!");

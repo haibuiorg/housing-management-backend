@@ -21,13 +21,14 @@ export const getMessageTranslation = async (
   // this should be company support language
   const languageCode = 'fi';
   const languageName = getLanguageName(languageCode);
+  message = message.replaceAll('\n', '\\n');
   const prompt = `Given this text: "${message}".If it is emoji, dont translate. If text is in English translate it to ${languageName}. Else if text is another language, translate text to English and ${languageName}. Response in JSON format with list, include orginal text: {"translated_message": [{"language_code": ISO 639-1 code of translated to language or original, "value": translated value}]}`;
   try {
     const response = await openai.createCompletion({
       model: 'text-davinci-003',
       prompt,
-      temperature: 0.25,
-      max_tokens: 1000,
+      temperature: 0.4,
+      max_tokens: 2000,
       top_p: 1,
       frequency_penalty: 0,
       presence_penalty: 0,

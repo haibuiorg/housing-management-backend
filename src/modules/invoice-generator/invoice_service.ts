@@ -124,21 +124,6 @@ export interface GenerateInvoiceParams {
 
 export const generateInvoiceList = async (params: GenerateInvoiceParams): Promise<Invoice[]> => {
   const invoiceList: Invoice[] = [];
-  const groupId = admin
-    .firestore()
-    .collection(HOUSING_COMPANIES)
-    .doc(params.company.id ?? '')
-    .collection(INVOICE_GROUP)
-    .doc().id;
-  const invoiceGroup: InvoiceGroup = {
-    id: groupId,
-    invoice_name: params.invoiceName,
-    is_deleted: false,
-    created_on: Date.now(),
-    company_id: params.company.id ?? '',
-    payment_date: params.paymentDateInMs,
-    number_of_invoices: params.receiverDetail.length,
-  };
   const paymentDate = new Date(params.paymentDateInMs);
   const formatDate = paymentDate.getDate() + '.' + (paymentDate.getMonth() + 1) + '.' + paymentDate.getFullYear();
   const paymentProductItems = (
@@ -154,7 +139,32 @@ export const generateInvoiceList = async (params: GenerateInvoiceParams): Promis
       .where(IS_ACTIVE, '==', true)
       .get()
   ).docs.map((doc) => doc.data() as PaymentProductItem);
-  const total = paymentProductItems.reduce((previous, newItem) => previous + newItem.amount, 0);
+  const total = paymentProductItems.reduce(
+    (previous, newItem) => {
+      const itemFounds = params.items.filter((item) => item.payment_product_id == newItem.id)
+      if (itemFounds.length === 0) {
+        return previous
+      }
+      const newItemValue = newItem.amount * (itemFounds[0].quantity ?? 0)
+      return previous + newItemValue
+    },
+    0,
+  );
+  const groupId = admin
+    .firestore()
+    .collection(HOUSING_COMPANIES)
+    .doc(params.company.id ?? '')
+    .collection(INVOICE_GROUP)
+    .doc().id;
+  const invoiceGroup: InvoiceGroup = {
+    id: groupId,
+    invoice_name: params.invoiceName,
+    is_deleted: false,
+    created_on: Date.now(),
+    company_id: params.company.id ?? '',
+    payment_date: params.paymentDateInMs,
+    number_of_invoices: params.receiverDetail.length,
+  };
   await admin
     .firestore()
     .collection(HOUSING_COMPANIES)
@@ -219,16 +229,16 @@ export const generateInvoiceList = async (params: GenerateInvoiceParams): Promis
       const address: Address = receiver.addresses
         ? receiver.addresses[0]
         : {
-            id: '',
-            city: params.company.city ?? '',
-            country_code: params.company.country_code ?? '',
-            postal_code: params.company.postal_code ?? '',
-            street_address_1: params.company.street_address_1 ?? '',
-            street_address_2: params.company.street_address_2 ?? '',
-            owner_type: 'company',
-            owner_id: params.company.id ?? '',
-            address_type: 'billing',
-          };
+          id: '',
+          city: params.company.city ?? '',
+          country_code: params.company.country_code ?? '',
+          postal_code: params.company.postal_code ?? '',
+          street_address_1: params.company.street_address_1 ?? '',
+          street_address_2: params.company.street_address_2 ?? '',
+          owner_type: 'company',
+          owner_id: params.company.id ?? '',
+          address_type: 'billing',
+        };
       if (params.issueExternalInvoice) {
         const externalInvoice = await createInvoiceForCompanyCustomer(params.company, receiver, 0, invoice);
         console.log(externalInvoice);
@@ -255,16 +265,19 @@ export const generateInvoiceList = async (params: GenerateInvoiceParams): Promis
           .addListener('error', (e) => {
             console.error(e);
           });
-        await generateInvoicePdf(
-          invoice,
-          params.company,
-          params.bankAccount,
-          receiver.first_name + ' ' + receiver.last_name,
-          gs,
-          address,
-        );
+        try {
+          await generateInvoicePdf(
+            invoice,
+            params.company,
+            params.bankAccount,
+            receiver.first_name + ' ' + receiver.last_name,
+            gs,
+            address,
+          );
+        } catch (e) {
+          console.log(e);
+        }
       }
-
       await sendNotificationToUsers([receiver.user_id], {
         title: 'New invoice: ' + invoice.invoice_name,
         body: 'New invoice arrived. Total: ' + invoice.subtotal + '. Due date: ' + new Date(invoice.payment_date),
@@ -295,10 +308,10 @@ const sendInvoiceEmail = async (
         '',
         `New invoice ${companyName?.length > 0 ? 'from ' + companyName : ''} arrived.</br>
         </br>Total: ` +
-          invoice.subtotal +
-          `.</br>
+        invoice.subtotal +
+        `.</br>
           </br>Due date: ` +
-          new Date(invoice.payment_date),
+        new Date(invoice.payment_date),
         invoiceLinks,
       );
       return invoice;

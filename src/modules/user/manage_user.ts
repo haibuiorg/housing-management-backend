@@ -114,7 +114,11 @@ const checkUserEmailVerificationStatus = async (request: Request): Promise<boole
   const emailVerified = request.user?.email_verified;
   // @ts-ignore
   const userId = request.user?.uid;
-  await admin.firestore().collection(USERS).doc(userId).update({ email_verified: emailVerified });
+  await admin
+    .firestore()
+    .collection(USERS)
+    .doc(userId)
+    .update({ email_verified: emailVerified == true });
   return emailVerified;
 };
 
