@@ -4,8 +4,8 @@ import admin from 'firebase-admin';
 import { COMPANY_MANAGER, HOUSING_COMPANIES, IS_VALID, NOTIFICATION_TOKENS, USERS } from '../../constants';
 import { User } from '../../dto/user';
 import { isCompanyManager } from '../authentication/authentication';
-import { copyStorageFolder, getPublicLinkForFile } from '../storage/manage_storage';
 import { addPaymentCustomerAccount } from '../payment-externals/payment-service';
+import { copyStorageFolder, getPublicLinkForFile } from '../storage/manage_storage';
 
 export const getUserData = async (request: Request, response: Response) => {
   // @ts-ignore

@@ -1,15 +1,20 @@
 import { PineconeClient } from '@pinecone-database/pinecone';
+import admin from 'firebase-admin';
+import { initializeAgentExecutorWithOptions } from 'langchain/agents';
+import { VectorDBQAChain } from 'langchain/chains';
+import { Document } from 'langchain/document';
+import { PDFLoader } from 'langchain/document_loaders/fs/pdf';
 import { OpenAIEmbeddings } from 'langchain/embeddings/openai';
 import { OpenAI } from 'langchain/llms/openai';
-import { ConversationalRetrievalQAChain } from 'langchain/chains';
-import { Document } from 'langchain/document';
+import { BufferMemory, ChatMessageHistory } from 'langchain/memory';
+import { AIChatMessage, HumanChatMessage } from 'langchain/schema';
 import { RecursiveCharacterTextSplitter } from 'langchain/text_splitter';
-import admin from 'firebase-admin';
-import { PDFLoader } from 'langchain/document_loaders/fs/pdf';
+import { ChainTool } from 'langchain/tools';
 import { PineconeStore } from 'langchain/vectorstores/pinecone';
-import { SerpAPI, ChainTool } from 'langchain/tools';
-import { initializeAgentExecutorWithOptions } from 'langchain/agents';
+import { ChatCompletionRequestMessage, Configuration, CreateImageRequestSizeEnum, OpenAIApi } from "openai";
 import os from 'os';
+import { AI_SENDER_ID } from '../../constants';
+import { Message } from '../../dto/message';
 
 export const askQuestion = async (
   question: string,
@@ -18,7 +23,7 @@ export const askQuestion = async (
   chat_history: string[],
 ): Promise<string> => {
   const answer = await queryPineconeVectorStoreAndQueryLLM(indexName, question, docType, chat_history);
-  return answer ?? '';
+  return answer ?? 'Sorry can you be more specific?';
 };
 
 export const addReferenceDoc = async (
@@ -42,63 +47,6 @@ export const addReferenceDoc = async (
 
 // 2. Export updatePinecone function
 export const updatePinecone = async (indexName: string, rawDocs: Document[], docType: string, languageCode: string) => {
-  /*const pinecone = new PineconeClient();
-  await pinecone.init({
-    apiKey: process.env.PINECONE_API_KEY ?? '',
-    environment: process.env.PINECONE_ENVIRONMENT ?? '',
-  });
-  console.log('Retrieving Pinecone index...');
-  const index = pinecone.Index(indexName);
-  console.log(`Pinecone index retrieved: ${indexName}`);
-  for (const doc of docs) {
-    console.log(`Processing document: ${doc.metadata.source}`);
-    const txtPath = doc.metadata.source;
-    const text = doc.pageContent;
-    // 6. Create RecursiveCharacterTextSplitter instance
-    const textSplitter = new RecursiveCharacterTextSplitter({ chunkSize: 1000 });
-    console.log('Splitting text into chunks...');
-    // 7. Split text into chunks (documents)
-    const chunks = await textSplitter.createDocuments([text]);
-    console.log(`Text split into ${chunks.length} chunks`);
-    console.log(`Calling OpenAI's Embedding endpoint documents with ${chunks.length} text chunks ...`);
-    // 8. Create OpenAI embeddings for documents
-    const embeddingsArrays = await new OpenAIEmbeddings().embedDocuments(
-      chunks.map((chunk) => chunk.pageContent.replace(/\n/g, ' ')),
-    );
-    console.log('Finished embedding documents');
-    console.log(`Creating ${chunks.length} vectors array with id, values, and metadata...`);
-    // 9. Create and upsert vectors in batches of 100
-    const batchSize = 100;
-    let batch = [];
-    for (let idx = 0; idx < chunks.length; idx++) {
-      const chunk = chunks[idx];
-      const vector = {
-        id: `${txtPath}_${idx}`,
-        values: embeddingsArrays[idx],
-        metadata: {
-          ...chunk.metadata,
-          loc: JSON.stringify(chunk.metadata.loc),
-          pageContent: chunk.pageContent,
-          txtPath,
-          docType,
-          languageCode,
-        },
-      };
-      batch.push(vector);
-      // When batch is full or it's the last item, upsert the vectors
-      if (batch.length === batchSize || idx === chunks.length - 1) {
-        await index.upsert({
-          upsertRequest: {
-            vectors: batch,
-          },
-        });
-        // Empty the batch
-        batch = [];
-      }
-    }
-    // 10. Log the number of vectors updated
-    console.log(`Pinecone index updated with ${chunks.length} vectors`);
-  }*/
   /* Split text into chunks */
   const pinecone = new PineconeClient();
   await pinecone.init({
@@ -176,37 +124,6 @@ const queryPineconeVectorStoreAndQueryLLM = async (
   docType: string,
   chat_history: string[],
 ): Promise<string | undefined> => {
-  /*console.log('Querying Pinecone vector store...');
-  const pineconeIndex = client.Index(indexName);
-  console.log(`Asking question: ${question}...`);
-  const llm = new OpenAI({ openAIApiKey: process.env.OPENAI_API_KEY ?? '', temperature: 0 });
-  const queryEmbedding = await new OpenAIEmbeddings().embedQuery(question);
-  const queryResponse = await pineconeIndex.query({
-    queryRequest: {
-      topK: 10,
-      vector: queryEmbedding,
-      includeMetadata: true,
-      includeValues: true,
-    },
-  });
-  if (!queryResponse.matches) {
-    return;
-  }
-  const concatenatedPageContent = queryResponse.matches
-    .map((match) => (match?.metadata as FirebaseObject).pageContent)
-    .join(' ');
-  const documents = [new Document({ pageContent: concatenatedPageContent })];
-  const chain = loadQAStuffChain(llm);
-  // 11. Execute the chain with input documents and question
-  const result = await chain.call({
-    question: question,
-    input_documents: documents,
-    chat_history: chat_history,
-  });
-  // 12. Log the answer
-  console.log({ result });
-  return result.text.toString().replaceAll('\n', '').trim();*/
-  // OpenAI recommends replacing newlines with spaces for best results
   const sanitizedQuestion = question.trim().replaceAll('\n', ' ');
 
   try {
@@ -225,16 +142,15 @@ const queryPineconeVectorStoreAndQueryLLM = async (
     });
 
     //create chain
-    const executor = await makeExecutor(vectorStore);
-    console.log('executor', 'executor created');
-    const response = await executor?.call({ input: sanitizedQuestion });
+    const executor = await makeExecutor(vectorStore, chat_history);
+
+    const response = await executor?.call({ input: sanitizedQuestion, question: sanitizedQuestion, chat_history: [] });
 
     //Ask a question using chat history
     /*const response = await chain.call({
       question: sanitizedQuestion,
       chat_history,
     });*/
-    console.log('response', response?.output.toString());
 
     return response?.output;
   } catch (error) {
@@ -243,54 +159,124 @@ const queryPineconeVectorStoreAndQueryLLM = async (
   }
 };
 
-const CONDENSE_PROMPT = `Given the following conversation and a follow up question, rephrase the follow up question to be a standalone question.
 
-Chat History:
-{chat_history}
-Follow Up Input: {question}
-Standalone question:`;
 
-const QA_PROMPT = `You are a helpful AI assistant. Use the following pieces of context to answer the question at the end.
-If you don't know the answer, just say you don't know. DO NOT try to make up an answer.
-If the question is not related to the context, politely respond that you are tuned to only answer questions that are related to the context.
-
-{context}
-
-Question: {question}
-Helpful answer in markdown:`;
-
-const makeExecutor = async (vectorstore: PineconeStore) => {
+const makeExecutor = async (vectorStore: PineconeStore, chat_history: string[]) => {
+  process.env.LANGCHAIN_HANDLER = "langchain";
   const model = new OpenAI({
-    temperature: 0.3, // increase temepreature to get more creative answers
-    modelName: 'gpt-3.5-turbo', //change this to gpt-4 if you have access
+    temperature: 0.01, // increase temepreature to get more creative answers
+    modelName: 'gpt-3.5-turbo-0301', //change this to gpt-4 if you have access
   });
-  const chain = ConversationalRetrievalQAChain.fromLLM(model, vectorstore.asRetriever(), {
-    qaTemplate: QA_PROMPT,
+  const pastMessages = [];
+  for (let i = 0; i < chat_history.length - 1; i++) {
+    if (chat_history[i].startsWith('Input: ')) {
+      pastMessages.push(new HumanChatMessage(chat_history[i].replace('Input: ', '')));
+      pastMessages.push(new AIChatMessage(chat_history[i + 1].replace('Output: ', '')));
+    }
+  }
+  const memory = new BufferMemory({
+    chatHistory: new ChatMessageHistory(pastMessages),
+    memoryKey: 'chat_history',
+    inputKey: 'input',
+    outputKey: 'output',
+  });
 
-    questionGeneratorTemplate: CONDENSE_PROMPT,
-    returnSourceDocuments: true, //The number of source documents returned is 4 by default
-  });
+  const chain = VectorDBQAChain.fromLLM(model, vectorStore);
+  chain.memory = memory;
+
   const qaTool = new ChainTool({
     name: 'housing-association-qa',
     description:
-      'Housing association or housing company QA - useful for when you need to ask questions about housing association.',
+      'Housing association and housing company information - useful for when you need to ask questions about housing association.',
     chain: chain,
-    returnDirect: true,
-  });
+    verbose: true,
+  },);
   const tools = [
-    new SerpAPI(process.env.SERP_API_KEY, {
+    /*new SerpAPI(process.env.SERP_API_KEY, {
       location: 'Austin,Texas,United States',
       hl: 'en',
       gl: 'us',
-    }),
+    }),*/
     qaTool,
   ];
   try {
     const executor = await initializeAgentExecutorWithOptions(tools, model, {
       agentType: 'chat-conversational-react-description',
+      memory,
+      verbose: true,
     });
+    console.log('executor', executor);
     return executor;
-  } catch (e) {}
+  } catch (e) {
+    console.log(e);
+  }
 
   return;
 };
+
+export const adminAskQuestion = async (userId: string, question: string, chatHistory: Message[]) => {
+
+  try {
+
+    const messages: ChatCompletionRequestMessage[] = chatHistory.map(
+      (item) => {
+        return {
+          role: item.sender_id == userId ? 'user' : item.sender_id == AI_SENDER_ID ? 'assistant' : 'system',
+          content: item.message,
+          //name: adminUser.first_name + adminUser.first_name
+        }
+      }
+    );
+    const configuration = new Configuration({
+      apiKey: process.env.OPENAI_API_KEY,
+    });
+    const openai = new OpenAIApi(configuration);
+    const completion = await openai.createChatCompletion({
+      model: "gpt-3.5-turbo",
+      messages,
+      user: userId
+    });
+    console.log('completion', completion);
+    const answer = completion.data.choices[0].message?.content ?? 'Sorry, I did not understand that. Can you please rephrase your question?';
+    return answer;
+
+  } catch (error) {
+    console.log('error', error);
+  }
+  return 'Sorry, I did not understand that. Can you please rephrase your question?';
+}
+
+export const generateImage = async (userId: string, prompt: string, numberOfImages = 1, size: CreateImageRequestSizeEnum) => {
+  try {
+    const configuration = new Configuration({
+      apiKey: process.env.OPENAI_API_KEY,
+    });
+    const openai = new OpenAIApi(configuration);
+    const response = await openai.createImage({
+      prompt,
+      n: numberOfImages,
+      size,
+      user: userId
+    });
+    return response.data;
+  } catch (error) {
+    console.log('error', error);
+
+  }
+
+}
+/*const CONDENSE_PROMPT = `Given the following conversation and a follow up question, rephrase the follow up question to be a standalone question.
+
+Chat History:
+{chat_history}
+Follow Up Input: {input}
+Standalone question:`;
+
+const QA_PROMPT = `You are a helpful AI assistant working for Priorli, a SaaS company providing solutions for housing and apartment manangement. Use the following pieces of context to answer the question at the end.
+If you don't know the answer, just say you don't know. DO NOT try to make up an answer.
+If the question is not related to the context, politely respond that you are tuned to only answer questions that are related to the context.
+
+{context}
+
+Question: {text}
+Helpful answer in markdown:`;*/

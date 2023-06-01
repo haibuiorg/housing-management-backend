@@ -139,17 +139,14 @@ export const generateInvoiceList = async (params: GenerateInvoiceParams): Promis
       .where(IS_ACTIVE, '==', true)
       .get()
   ).docs.map((doc) => doc.data() as PaymentProductItem);
-  const total = paymentProductItems.reduce(
-    (previous, newItem) => {
-      const itemFounds = params.items.filter((item) => item.payment_product_id == newItem.id)
-      if (itemFounds.length === 0) {
-        return previous
-      }
-      const newItemValue = newItem.amount * (itemFounds[0].quantity ?? 0)
-      return previous + newItemValue
-    },
-    0,
-  );
+  const total = paymentProductItems.reduce((previous, newItem) => {
+    const itemFounds = params.items.filter((item) => item.payment_product_id == newItem.id);
+    if (itemFounds.length === 0) {
+      return previous;
+    }
+    const newItemValue = newItem.amount * (itemFounds[0].quantity ?? 0);
+    return previous + newItemValue;
+  }, 0);
   const groupId = admin
     .firestore()
     .collection(HOUSING_COMPANIES)
@@ -229,16 +226,16 @@ export const generateInvoiceList = async (params: GenerateInvoiceParams): Promis
       const address: Address = receiver.addresses
         ? receiver.addresses[0]
         : {
-          id: '',
-          city: params.company.city ?? '',
-          country_code: params.company.country_code ?? '',
-          postal_code: params.company.postal_code ?? '',
-          street_address_1: params.company.street_address_1 ?? '',
-          street_address_2: params.company.street_address_2 ?? '',
-          owner_type: 'company',
-          owner_id: params.company.id ?? '',
-          address_type: 'billing',
-        };
+            id: '',
+            city: params.company.city ?? '',
+            country_code: params.company.country_code ?? '',
+            postal_code: params.company.postal_code ?? '',
+            street_address_1: params.company.street_address_1 ?? '',
+            street_address_2: params.company.street_address_2 ?? '',
+            owner_type: 'company',
+            owner_id: params.company.id ?? '',
+            address_type: 'billing',
+          };
       if (params.issueExternalInvoice) {
         const externalInvoice = await createInvoiceForCompanyCustomer(params.company, receiver, 0, invoice);
         console.log(externalInvoice);
@@ -308,10 +305,10 @@ const sendInvoiceEmail = async (
         '',
         `New invoice ${companyName?.length > 0 ? 'from ' + companyName : ''} arrived.</br>
         </br>Total: ` +
-        invoice.subtotal +
-        `.</br>
+          invoice.subtotal +
+          `.</br>
           </br>Due date: ` +
-        new Date(invoice.payment_date),
+          new Date(invoice.payment_date),
         invoiceLinks,
       );
       return invoice;

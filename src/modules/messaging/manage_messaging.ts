@@ -2,7 +2,10 @@ import { Request, Response } from 'express';
 import admin, { firestore } from 'firebase-admin';
 // eslint-disable-next-line max-len
 import {
+  ADMIN_BOT_MESSAGE_TYPE,
+  AI_SENDER_ID,
   APP_COLOR,
+  BOT_SUPPORT_MESSAGE_TYPE,
   COMMUNITY_MESSAGE_TYPE,
   CONVERSATIONS,
   COUNTRY_CODE,
@@ -12,17 +15,20 @@ import {
   MESSAGES,
   SUPPORT_CHANNELS,
   SUPPORT_MESSAGE_TYPE,
+  USERS,
 } from '../../constants';
-import { StorageItem } from '../../dto/storage_item';
 import { Conversation } from '../../dto/conversation';
 import { Message } from '../../dto/message';
+import { StorageItem } from '../../dto/storage_item';
+import { getAdminUser } from '../admin/admin-service';
 import { isAdminRole, isCompanyManager, isCompanyTenant } from '../authentication/authentication';
+import { adminAskQuestion, askQuestion } from '../chat-helper/chat-helper-service';
+import { sendEmail } from '../email/email_module';
 import { sendNotificationToUsers } from '../notification/notification_service';
-import { getUserDisplayName } from '../user/manage_user';
 import { copyStorageFolder } from '../storage/manage_storage';
 import { getSubscriptionPlanById, hasOneActiveSubscription } from '../subscription/subscription-service';
 import { getMessageTranslation, storageItemTranslation } from '../translation/translation_service';
-import { askQuestion } from '../chat-helper/chat-helper-service';
+import { getUserDisplayName } from '../user/manage_user';
 
 export const sendMessage = async (request: Request, response: Response) => {
   const message = request.body.message;
@@ -36,7 +42,7 @@ export const sendMessage = async (request: Request, response: Response) => {
   // @ts-ignore
   const senderId = request.user?.uid;
   const mainPath =
-    type === COMMUNITY_MESSAGE_TYPE || type === FAULT_REPORT_MESSAGE_TYPE ? HOUSING_COMPANIES : SUPPORT_CHANNELS;
+    type === COMMUNITY_MESSAGE_TYPE || type === FAULT_REPORT_MESSAGE_TYPE ? HOUSING_COMPANIES : type == ADMIN_BOT_MESSAGE_TYPE ? USERS : SUPPORT_CHANNELS;
   const conversation = await getConversationDetail(type, channelId, conversationId);
   if (conversation.user_ids?.includes(senderId) !== true) {
     response.status(403).send({
@@ -121,7 +127,25 @@ export const sendMessage = async (request: Request, response: Response) => {
     response.status(200).send(messageData);
     translateMassage(messageData, mainPath, channelId, conversationId, senderId, type);
     storageItemTranslation(messageData.storage_items ?? []);
-    if (mainPath === SUPPORT_CHANNELS) {
+    if (conversation.type === BOT_SUPPORT_MESSAGE_TYPE || conversation.type === ADMIN_BOT_MESSAGE_TYPE) {
+
+      const loadingData: Message = {
+        created_on: Date.now(),
+        id: "-1",
+        message: "Thinking ...",
+        sender_id: 'support',
+        sender_name: 'AI',
+        updated_on: Date.now(),
+      };
+      await admin
+        .firestore()
+        .collection(mainPath)
+        .doc(channelId)
+        .collection(CONVERSATIONS)
+        .doc(conversationId)
+        .collection(MESSAGES)
+        .doc("-1")
+        .set(loadingData);
       const chatHistory = (
         await admin
           .firestore()
@@ -130,15 +154,31 @@ export const sendMessage = async (request: Request, response: Response) => {
           .collection(CONVERSATIONS)
           .doc(conversationId)
           .collection(MESSAGES)
-          .limit(100)
+          .limit(50)
           .get()
       ).docs.map((item) => item.data()) as Message[];
-      const answer = await askQuestion(
+      const answer = conversation.type === ADMIN_BOT_MESSAGE_TYPE ? await adminAskQuestion(senderId, message, chatHistory) : await askQuestion(
         message,
         'housing-company-generic',
         'housing-company-generic',
-        chatHistory.sort((a, b) => a.created_on - b.created_on).map((item) => item.message),
+        chatHistory
+          .sort((a, b) => a.created_on - b.created_on)
+          .map((item) => {
+            if (item.sender_id === 'support') {
+              return 'Output: ' + item.message;
+            }
+            return 'Input: ' + item.message;
+          }),
       );
+      await admin
+        .firestore()
+        .collection(mainPath)
+        .doc(channelId)
+        .collection(CONVERSATIONS)
+        .doc(conversationId)
+        .collection(MESSAGES)
+        .doc("-1").delete()
+
       const newMessageId = admin
         .firestore()
         .collection(mainPath)
@@ -151,10 +191,12 @@ export const sendMessage = async (request: Request, response: Response) => {
         created_on: Date.now(),
         id: newMessageId,
         message: answer,
-        sender_id: 'support',
+        sender_id: AI_SENDER_ID,
         sender_name: 'AI',
         updated_on: Date.now(),
+        seen_by: [AI_SENDER_ID],
       };
+
       await admin
         .firestore()
         .collection(mainPath)
@@ -164,7 +206,9 @@ export const sendMessage = async (request: Request, response: Response) => {
         .collection(MESSAGES)
         .doc(newMessageId)
         .set(answerData);
-      translateMassage(answerData, mainPath, channelId, conversationId, 'support', type);
+      if (conversation.type !== ADMIN_BOT_MESSAGE_TYPE) {
+        translateMassage(answerData, mainPath, channelId, conversationId, 'support', type);
+      }
     }
   } catch (errors) {
     console.log(errors);
@@ -207,7 +251,7 @@ const getConversationDetail = async (
   conversationId: string,
 ): Promise<Conversation> => {
   const mainPath =
-    type === COMMUNITY_MESSAGE_TYPE || type === FAULT_REPORT_MESSAGE_TYPE ? HOUSING_COMPANIES : SUPPORT_CHANNELS;
+    type === COMMUNITY_MESSAGE_TYPE || type === FAULT_REPORT_MESSAGE_TYPE ? HOUSING_COMPANIES : type === ADMIN_BOT_MESSAGE_TYPE ? USERS : SUPPORT_CHANNELS;
   try {
     return (
       await admin.firestore().collection(mainPath).doc(channelId).collection(CONVERSATIONS).doc(conversationId).get()
@@ -241,7 +285,7 @@ export const getConversationRequest = async (request: Request, response: Respons
         });
         return;
       }
-    } else if (type === SUPPORT_MESSAGE_TYPE) {
+    } else if (type === SUPPORT_MESSAGE_TYPE || type === BOT_SUPPORT_MESSAGE_TYPE) {
       if (conversation.user_ids?.includes(senderId) !== true && !isAdminRole(senderId)) {
         response.status(403).send({
           errors: { message: 'Unauthorized', code: 'unauthorized_sender' },
@@ -352,6 +396,7 @@ export const startNewConversationRequest = async (request: Request, response: Re
     response.status(500).send({ errors: { message: 'Missing value', code: 'missing_value' } });
     return;
   }
+  const name = request.body.name?.toString() ?? userId + '_' + new Date().getTime();
   if (type === COMMUNITY_MESSAGE_TYPE) {
     const channelIdOrCompanyId = request.body.channel_id?.toString() ?? '';
     const company = await isCompanyManager(userId, channelIdOrCompanyId);
@@ -382,7 +427,6 @@ export const startNewConversationRequest = async (request: Request, response: Re
       });
       return;
     }
-    const name = request.body.name?.toString() ?? company.name + '_' + new Date().getTime();
     const conversationId = admin
       .firestore()
       .collection(HOUSING_COMPANIES)
@@ -409,7 +453,7 @@ export const startNewConversationRequest = async (request: Request, response: Re
       .doc(conversationId)
       .set(conversation);
     response.status(200).send(conversation);
-  } else if (type === SUPPORT_MESSAGE_TYPE) {
+  } else if (type === SUPPORT_MESSAGE_TYPE || type === BOT_SUPPORT_MESSAGE_TYPE) {
     let channelId = request.body.channel_id?.toString() ?? '';
     if (channelId.length === 0) {
       const countryCode = request.body.country_code?.toString() ?? '';
@@ -433,7 +477,7 @@ export const startNewConversationRequest = async (request: Request, response: Re
       }
       channelId = channel.id;
     }
-    const name = request.body.name?.toString() ?? userId + '_' + new Date().getTime();
+
     const conversationId = admin
       .firestore()
       .collection(SUPPORT_CHANNELS)
@@ -460,7 +504,39 @@ export const startNewConversationRequest = async (request: Request, response: Re
       .doc(conversationId)
       .set(conversation);
     response.status(200).send(conversation);
+  } else if (type === ADMIN_BOT_MESSAGE_TYPE) {
+    const isAdmin = await isAdminRole(userId);
+    if (!isAdmin) {
+      response.sendStatus(403);
+      return;
+    }
+    const conversationId = admin
+      .firestore()
+      .collection(USERS)
+      .doc(userId)
+      .collection(CONVERSATIONS)
+      .doc().id;
+    const conversation: Conversation = {
+      id: conversationId,
+      channel_id: userId,
+      name,
+      type,
+      status: 'ongoing',
+      created_on: Date.now(),
+      updated_on: Date.now(),
+      user_ids: [userId],
+      apartment_id: null,
+    };
+    await admin
+      .firestore()
+      .collection(USERS)
+      .doc(userId)
+      .collection(CONVERSATIONS)
+      .doc(conversationId)
+      .set(conversation);
+    response.status(200).send(conversation);
   } else {
+    console.log(type);
     response.status(500).send({ errors: { message: 'Invalid type', code: 'invalid_type' } });
   }
 };
@@ -475,3 +551,56 @@ export const getCompanyConversationCount = async (companyId: string): Promise<nu
     .get();
   return querySnapshot.data()?.count ?? 0;
 };
+
+
+// Right now only support BOT_SUPPORT => SUPPORT
+export const changeConversationType = async (request: Request, response: Response) => {
+  const type = request.body.type;
+  const channelId = request.body.channel_id;
+  const conversationId = request.body.conversation_id;
+  if (!channelId || !type || !conversationId) {
+    console.log("request", request.body)
+    response.status(500).send({ errors: { message: 'Missing value', code: 'missing_value' } });
+    return;
+  }
+  // @ts-ignore
+  const userId = request.user?.uid;
+  const conversation = await getConversationDetail(type.toString(), channelId.toString(), conversationId?.toString());
+  if (!conversation || conversation.user_ids?.indexOf(userId) === -1) {
+    response.status(404).send({ errors: { message: 'Not found', code: 'not_found' } });
+    return;
+  }
+  if (type === BOT_SUPPORT_MESSAGE_TYPE) {
+    try {
+      await admin
+        .firestore()
+        .collection(SUPPORT_CHANNELS)
+        .doc(channelId.toString() ?? '')
+        .collection(CONVERSATIONS)
+        .doc(conversationId?.toString())
+        .update({ type: SUPPORT_MESSAGE_TYPE });
+      conversation.type = SUPPORT_MESSAGE_TYPE;
+      //notify admin
+      sendEmailToAdmin(conversation);
+      response.status(200).send(conversation);
+      return;
+    } catch (error) {
+      console.error(error);
+      response.status(500).send({ errors: { message: 'Something wrong', code: 'something_wrong' } });
+      return;
+    }
+
+  }
+  console.log(type);
+  response.status(500).send({ errors: { message: 'Invalid type', code: 'invalid_type' } });
+};
+
+const sendEmailToAdmin = async (conversation: Conversation) => {
+  const admins = await getAdminUser();
+  const adminEmails = admins?.map((admin) => admin.email);
+  if (adminEmails && adminEmails.length > 0) {
+    await sendEmail(adminEmails, 'Automatic email', 'New support message', `New support message from ${conversation.name}`, 'New support message check it please', [])
+  }
+
+}
+

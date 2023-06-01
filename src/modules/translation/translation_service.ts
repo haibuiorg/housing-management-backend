@@ -1,11 +1,11 @@
-import { Configuration, CreateCompletionResponse, OpenAIApi } from 'openai';
+import { AnalyzeDocumentCommand, AnalyzeDocumentRequest, TextractClient } from '@aws-sdk/client-textract';
 import admin from 'firebase-admin';
+import { Configuration, CreateCompletionResponse, OpenAIApi } from 'openai';
 import { DOCUMENTS, TRANSLATIONS } from '../../constants';
-import { TextractClient, AnalyzeDocumentCommand, AnalyzeDocumentRequest } from '@aws-sdk/client-textract';
 
-import { getKeyValueMap, getKeyValueRelationship } from './textract_utils';
-import { Translation } from '../../dto/translation';
 import { StorageItem } from '../../dto/storage_item';
+import { Translation } from '../../dto/translation';
+import { getKeyValueMap, getKeyValueRelationship } from './textract_utils';
 
 export const getMessageTranslation = async (
   message: string,
@@ -13,6 +13,9 @@ export const getMessageTranslation = async (
   type: 'announcement' | 'message' | 'support',
   requestedBy: string,
 ): Promise<Translation[]> => {
+  if (message.length === 0) {
+    return [];
+  }
   //TODO translate with multiple languages
   const configuration = new Configuration({
     apiKey: process.env.OPENAI_API_KEY,
@@ -21,7 +24,7 @@ export const getMessageTranslation = async (
   // this should be company support language
   const languageCode = 'fi';
   const languageName = getLanguageName(languageCode);
-  message = message.replaceAll('\n', '\\n');
+  //message = message.replaceAll('\n', '/\n');
   const prompt = `Given this text: "${message}".If it is emoji, dont translate. If text is in English translate it to ${languageName}. Else if text is another language, translate text to English and ${languageName}. Response in JSON format with list, include orginal text: {"translated_message": [{"language_code": ISO 639-1 code of translated to language or original, "value": translated value}]}`;
   try {
     const response = await openai.createCompletion({

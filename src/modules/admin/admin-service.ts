@@ -2,22 +2,26 @@
 import { Request, Response } from 'express';
 import admin from 'firebase-admin';
 import {
+  ADMIN,
   CONTACT_LEADS,
   COUNTRY_CODE,
   HOUSING_COMPANIES,
   IS_ACTIVE,
   PAYMENT_PRODUCT_ITEMS,
+  ROLES,
   STORAGE_ITEMS,
   SUBSCRIPTION_PLAN,
+  USERS
 } from '../../constants';
-import { SubscriptionPlan } from '../../dto/subscription_plan';
-import { isAdminRole } from '../authentication/authentication';
-import { addStripeProduct, addStripeSubscriptionProduct } from '../payment-externals/payment-service';
 import { PaymentProductItem } from '../../dto/payment-product-item';
-import { getCountryData } from '../country/manage_country';
-import { addReferenceDoc, createPineconeIndex, getPineconeIndexes } from '../chat-helper/chat-helper-service';
-import { copyStorageFolder } from '../storage/manage_storage';
 import { StorageItem } from '../../dto/storage_item';
+import { SubscriptionPlan } from '../../dto/subscription_plan';
+import { User } from '../../dto/user';
+import { isAdminRole } from '../authentication/authentication';
+import { addReferenceDoc, createPineconeIndex, generateImage, getPineconeIndexes } from '../chat-helper/chat-helper-service';
+import { getCountryData } from '../country/manage_country';
+import { addStripeProduct, addStripeSubscriptionProduct } from '../payment-externals/payment-service';
+import { copyStorageFolder } from '../storage/manage_storage';
 
 export const addSubscriptionPlan = async (request: Request, response: Response) => {
   // @ts-ignore
@@ -308,3 +312,34 @@ export const getReferenceDocIndexList = async (request: Request, response: Respo
   const indexList = await getPineconeIndexes();
   response.send(indexList);
 };
+
+
+export const getAdminUser = async (): Promise<User[] | undefined> => {
+  try {
+    const admins = (await admin
+      .firestore()
+      .collection(USERS).where(ROLES, 'array-contains', ADMIN).get()).docs.map((doc) => doc.data() as User);
+    return admins;
+  } catch (errors) {
+    console.log(errors);
+    return []
+  }
+}
+
+export const generateImageRequest = async (request: Request, response: Response) => {
+  // @ts-ignore
+  const userId = request.user.uid;
+  const isAdmin = await isAdminRole(userId);
+  if (!isAdmin) {
+    response.sendStatus(403);
+    return;
+  }
+  const { prompt, number_of_images, size } = request.body;
+  try {
+    const responseData = await generateImage(userId, prompt, number_of_images, size ?? "1024x1024");
+    response.status(200).send(responseData);
+  } catch (error) {
+    console.log(error);
+    response.sendStatus(500);
+  }
+}

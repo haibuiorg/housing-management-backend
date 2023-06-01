@@ -1,11 +1,11 @@
 import { Request, Response } from 'express';
 import admin from 'firebase-admin';
-import { getUserApartments } from '../housing/manage_apartment';
 import { ADMIN, APARTMENTS, HOUSING_COMPANIES } from '../../constants';
+import { Apartment } from '../../dto/apartment';
+import { Company } from '../../dto/company';
+import { getUserApartments } from '../housing/manage_apartment';
 import { getCompanyData } from '../housing/manage_housing_company';
 import { removeCompanyFromUser, retrieveUser } from '../user/manage_user';
-import { Company } from '../../dto/company';
-import { Apartment } from '../../dto/apartment';
 
 export const validateIdTokenAllowAnonymous = async (req: Request, res: Response, next: () => void) => {
   if (
@@ -163,7 +163,7 @@ export const isCompanyManager = async (userId: string, housingCompanyId: string)
 export const isCompanyTenant = async (userId: string, housingCompanyId: string): Promise<boolean> => {
   try {
     const tenants = await getUserApartments(userId, housingCompanyId);
-    return tenants.length > 0 || (await isCompanyManager(userId, housingCompanyId)) || (await isAdminRole(userId));
+    return tenants.length > 0 || (await isCompanyManager(userId, housingCompanyId) !== undefined) || (await isAdminRole(userId) !== undefined);
   } catch (errors) {
     console.log(errors);
     return false;
@@ -172,7 +172,7 @@ export const isCompanyTenant = async (userId: string, housingCompanyId: string):
 
 export const isAdminRole = async (userId: string) => {
   const user = await retrieveUser(userId);
-  return user?.roles.includes(ADMIN);
+  return user?.roles.includes(ADMIN) ? user : undefined;
 };
 
 export const isApartmentIdTenant = async (

@@ -45,6 +45,8 @@ export const SUPPORT_CHANNELS = 'support_channels';
 export const COMMUNITY_MESSAGE_TYPE = 'community';
 export const FAULT_REPORT_MESSAGE_TYPE = 'fault_report';
 export const SUPPORT_MESSAGE_TYPE = 'support';
+export const BOT_SUPPORT_MESSAGE_TYPE = 'bot_support';
+export const ADMIN_BOT_MESSAGE_TYPE = 'admin_bot_support';
 export const CONVERSATIONS = 'conversations';
 export const MESSAGES = 'messages';
 export const DOCUMENTS = 'documents';
@@ -79,3 +81,5 @@ export const PRIORLI_PUBLIC_LOGO_URL =
 export const TRANSLATIONS = 'translations';
 
 export const STORAGE_ITEMS = 'storage_items';
+
+export const AI_SENDER_ID = 'support';

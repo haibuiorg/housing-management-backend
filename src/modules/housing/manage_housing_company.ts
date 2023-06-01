@@ -1,7 +1,7 @@
 'use strict';
-import { Request, Response, request } from 'express';
+import { Request, Response } from 'express';
 import admin from 'firebase-admin';
-import { addMultipleApartmentsInBuilding, addTenantToApartment, getUserApartment } from './manage_apartment';
+import { addMultipleApartmentsInBuilding, addTenantToApartment } from './manage_apartment';
 // eslint-disable-next-line max-len
 import {
   APARTMENTS,
@@ -16,6 +16,12 @@ import {
   USERS,
 } from '../../constants';
 import { Company } from '../../dto/company';
+import { FirebaseObject } from '../../dto/firebase_object';
+import { PaymentProductItem } from '../../dto/payment-product-item';
+import { StorageItem } from '../../dto/storage_item';
+import { UI } from '../../dto/ui';
+import { User } from '../../dto/user';
+import { isValidEmail } from '../../strings_utils';
 import {
   isAdminRole,
   isCompanyManager,
@@ -25,25 +31,18 @@ import {
   removeUserAsCompanyOwner,
   removeUserFromCompany,
 } from '../authentication/authentication';
-import { addHousingCompanyToUser, retrieveUser } from '../user/manage_user';
-import { getCountryData, isValidCountryCode } from '../country/manage_country';
-import { UI } from '../../dto/ui';
-import { copyStorageFolder, getPublicLinkForFile } from '../storage/manage_storage';
-import { codeValidation, removeCode } from '../authentication/code_validation';
-import { StorageItem } from '../../dto/storage_item';
-import { User } from '../../dto/user';
-import { isValidEmail } from '../../strings_utils';
+import { codeValidation } from '../authentication/code_validation';
 import { createUserWithEmail } from '../authentication/register';
+import { getCountryData, isValidCountryCode } from '../country/manage_country';
 import { sendManagerAccountCreatedEmail } from '../email/email_module';
 import {
   addStripeProductForConnectAccount,
   createConnectAccount,
-  createConnectAccountLink,
-  retrieveConnectAccount,
+  createConnectAccountLink
 } from '../payment-externals/payment-service';
-import { PaymentProductItem } from '../../dto/payment-product-item';
+import { copyStorageFolder, getPublicLinkForFile } from '../storage/manage_storage';
 import { storageItemTranslation } from '../translation/translation_service';
-import { FirebaseObject } from '../../dto/firebase_object';
+import { addHousingCompanyToUser, retrieveUser } from '../user/manage_user';
 
 export const createHousingCompany = async (request: Request, response: Response) => {
   const housingCompanyName = request.body.name;

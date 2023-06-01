@@ -3016,10 +3016,10 @@ klaw@^3.0.0:
   dependencies:
     graceful-fs "^4.1.9"
 
-langchain@^0.0.78:
-  version "0.0.78"
-  resolved "https://registry.yarnpkg.com/langchain/-/langchain-0.0.78.tgz#91211eb282452f2cd5a14b82ec02de345cc64ea8"
-  integrity sha512-AXoai3V1fJyQ2vDSS3KqRJr1VxRoAxX0L1sFeuXGvwyEzfzv6/dDKPJ7K1Onew3Jmfzu23t1qqhwsSMZOmwo7g==
+langchain@^0.0.88:
+  version "0.0.88"
+  resolved "https://registry.yarnpkg.com/langchain/-/langchain-0.0.88.tgz#bc83f9cd569c3dceb4d2773270eb94e8cb1fe61d"
+  integrity sha512-D0SVfXhZejI/mLM4LG6WGGJlROp2/LLXqPq6W5P5/Zq7Z1sbKQBza3ywXPRevjKe+PtIbQ4VOLtynmuGIqy9xg==
   dependencies:
     "@anthropic-ai/sdk" "^0.4.3"
     ansi-styles "^5.0.0"

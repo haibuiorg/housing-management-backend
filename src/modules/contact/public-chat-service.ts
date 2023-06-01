@@ -1,9 +1,9 @@
 import { Request, Response } from 'express';
+import admin, { auth } from 'firebase-admin';
+import { BOT_SUPPORT_MESSAGE_TYPE, CONVERSATIONS, COUNTRY_CODE, LANGUAGE_CODE, SUPPORT_CHANNELS } from '../../constants';
+import { Conversation } from '../../dto/conversation';
 import { createUserAnonymous, createUserWithEmail } from '../authentication/register';
 import { getSupportedContries } from '../country/manage_country';
-import admin, { auth } from 'firebase-admin';
-import { CONVERSATIONS, COUNTRY_CODE, LANGUAGE_CODE, SUPPORT_CHANNELS, SUPPORT_MESSAGE_TYPE } from '../../constants';
-import { Conversation } from '../../dto/conversation';
 
 export const startNewChatbotRequest = async (request: Request, response: Response) => {
   const { email, country_code, language_code, first_name, last_name, conversation_name, phone } = request.body;
@@ -62,7 +62,7 @@ export const startNewChatbotRequest = async (request: Request, response: Respons
       id: conversationId,
       channel_id: channelId,
       name: name,
-      type: SUPPORT_MESSAGE_TYPE,
+      type: BOT_SUPPORT_MESSAGE_TYPE,
       status: 'pending',
       created_on: createdOn,
       updated_on: createdOn,
@@ -77,5 +77,5 @@ export const startNewChatbotRequest = async (request: Request, response: Respons
       .doc(conversationId)
       .set(conversation);
     response.status(200).send({ conversation, token });
-  } catch (error) {}
+  } catch (error) { }
 };

@@ -51,7 +51,8 @@ const generateHeader = async (doc: PDFKit.PDFDocument, company: Company) => {
     .fontSize(10)
     .text(
       // eslint-disable-next-line max-len
-      `${company.street_address_1 ?? ''} ${company.street_address_2 ?? ''}, ${company.postal_code ?? ''}, ${company.city ?? ''
+      `${company.street_address_1 ?? ''} ${company.street_address_2 ?? ''}, ${company.postal_code ?? ''}, ${
+        company.city ?? ''
       }`,
       200,
       65,
@@ -107,16 +108,7 @@ const generateInvoiceTable = (doc: PDFKit.PDFDocument, invoice: Invoice) => {
   const invoiceTableTop = 330;
 
   doc.font('Helvetica-Bold');
-  generateTableRow(
-    doc,
-    invoiceTableTop,
-    'Name',
-    'Description',
-    'Price',
-    'Qty',
-    'Incld. Tax (%)',
-    'Line Total',
-  );
+  generateTableRow(doc, invoiceTableTop, 'Name', 'Description', 'Price', 'Qty', 'Incld. Tax (%)', 'Line Total');
   generateHr(doc, invoiceTableTop + 20);
   doc.font('Helvetica');
 

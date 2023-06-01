@@ -2,11 +2,16 @@
 "use strict";
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 require("dotenv").config();
-import express from "express";
 import bodyParser from "body-parser";
+import express from "express";
 import admin from "firebase-admin";
 import { cancelPendingInvitationRequest, getInvitationRequest, inviteTenants, resendPendingInvitationRequest } from "./src/modules/authentication/code_validation";
 // eslint-disable-next-line max-len
+import { validateFirebaseIdToken, validateIdTokenAllowAnonymous } from "./src/modules/authentication/authentication";
+import {
+  register,
+  registerWithCode,
+} from "./src/modules/authentication/register";
 import {
   addCompanyPaymentProductItemRequest,
   addDocumentToCompany,
@@ -27,11 +32,6 @@ import {
   updateCompanyDocument,
   updateHousingCompanyDetail,
 } from "./src/modules/housing/manage_housing_company";
-import {
-  registerWithCode,
-  register,
-} from "./src/modules/authentication/register";
-import { validateFirebaseIdToken, validateIdTokenAllowAnonymous } from "./src/modules/authentication/authentication";
 
 import {
   addConsumptionValue,
@@ -55,20 +55,20 @@ import {
   updateAparmentDocument,
 } from "./src/modules/housing/manage_apartment";
 import {
-  getWaterBillRequest,
-  getWaterBillByYearRequest,
-  getWaterBillLinkRequest,
-} from "./src/modules/water_consumption/water_bill";
+  changeUserPassword,
+  getUserData,
+  updateUserData,
+} from "./src/modules/user/manage_user";
 import {
   addNewWaterPrice,
   deleteWaterPrice,
   getActiveWaterPriceRequest,
 } from "./src/modules/water_consumption/manage_water_price";
 import {
-  changeUserPassword,
-  getUserData,
-  updateUserData,
-} from "./src/modules/user/manage_user";
+  getWaterBillByYearRequest,
+  getWaterBillLinkRequest,
+  getWaterBillRequest,
+} from "./src/modules/water_consumption/water_bill";
 // eslint-disable-next-line max-len
 import {
   getCountryByCountryCodeRequest,
@@ -83,6 +83,7 @@ import {
   getCompanyBankAccountRequest,
 } from "./src/modules/payment/manage_payment";
 // eslint-disable-next-line max-len
+import { sendPasswordResetEmail } from "./src/modules/email/email_module";
 import {
   addUserNotificationToken,
   createNotificationChannels,
@@ -93,7 +94,6 @@ import {
   setNotificationMessageSeen,
   subscribeNotificationChannels,
 } from "./src/modules/notification/notification_service";
-import { sendPasswordResetEmail } from "./src/modules/email/email_module";
 // eslint-disable-next-line max-len
 import {
   editAnnouncement,
@@ -103,6 +103,7 @@ import {
 } from "./src/modules/announcement/manage_announcement";
 // eslint-disable-next-line max-len
 import {
+  changeConversationType,
   getConversationRequest,
   joinConversationRequest,
   sendMessage,
@@ -131,6 +132,25 @@ import {
 import { createFaultReport } from "./src/modules/fault-report/fault-report-service";
 // eslint-disable-next-line max-len
 import {
+  addPaymentProductItem,
+  addStorageLinkReferenceDocument,
+  addSubscriptionPlan,
+  createDocumentIndex,
+  deletePaymentProductItem,
+  deleteSubscriptionPlan,
+  generateImageRequest,
+  getAllCompanies,
+  getContactLeadListRequest,
+  getPaymentProductItems,
+  getReferenceDocIndexList,
+  updateContactLeadStatus,
+} from "./src/modules/admin/admin-service";
+import {
+  submitContactForm,
+  submitOfferForm,
+} from "./src/modules/contact/customer-service";
+import { startNewChatbotRequest } from "./src/modules/contact/public-chat-service";
+import {
   deleteInvoice,
   generateInvoice,
   getCompanyInvoiceGroups,
@@ -138,6 +158,7 @@ import {
   getInvoices,
   sendInvoiceManually,
 } from "./src/modules/invoice-generator/invoice_service";
+import { connectAccountWebhookEvents, webhookEvents } from "./src/modules/payment-externals/payment-service";
 import {
   cancelSubscriptionRequest,
   createPaymentLinkSubscription,
@@ -148,25 +169,6 @@ import {
   purchasePaymentProductItem,
   subscriptionStatusCheck,
 } from "./src/modules/subscription/subscription-service";
-import { connectAccountWebhookEvents, webhookEvents } from "./src/modules/payment-externals/payment-service";
-import {
-  submitContactForm,
-  submitOfferForm,
-} from "./src/modules/contact/customer-service";
-import {
-  addPaymentProductItem,
-  addStorageLinkReferenceDocument,
-  addSubscriptionPlan,
-  createDocumentIndex,
-  deletePaymentProductItem,
-  deleteSubscriptionPlan,
-  getAllCompanies,
-  getContactLeadListRequest,
-  getPaymentProductItems,
-  getReferenceDocIndexList,
-  updateContactLeadStatus,
-} from "./src/modules/admin/admin-service";
-import { startNewChatbotRequest } from "./src/modules/contact/public-chat-service";
 
 const serviceAccountPath = process.env.SERVICE_ACCOUNT_PATH;
 const serviceAccount = require(serviceAccountPath!);
@@ -401,6 +403,8 @@ router.put(
   setConversationSeenRequest
 );
 router.get("/conversation", validateIdTokenAllowAnonymous, getConversationRequest);
+router.put("/conversation/type", validateIdTokenAllowAnonymous, changeConversationType);
+
 
 router.post(
   "/housing_company/documents",
@@ -556,6 +560,8 @@ router.get("/admin/reference_indexes", validateFirebaseIdToken, getReferenceDocI
 router.post("/admin/payment_product", validateFirebaseIdToken, addPaymentProductItem);
 router.delete("/admin/payment_product", validateFirebaseIdToken, deletePaymentProductItem);
 router.get("/payment_products", validateFirebaseIdToken, getPaymentProductItems);
+
+router.post("/admin/generate_image", validateFirebaseIdToken, generateImageRequest);
 
 router.post("/chatbot", startNewChatbotRequest);
 

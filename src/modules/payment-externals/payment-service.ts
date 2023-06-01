@@ -129,7 +129,6 @@ export const createInvoiceForCompanyCustomer = async (
         currency: item.payment_product_item.currency,
         quantity: item.quantity,
         description: item.payment_product_item.description,
-
       });
     }),
   );
